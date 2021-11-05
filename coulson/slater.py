@@ -1,5 +1,7 @@
 """Functions related to Slater orbitals."""
 
+from __future__ import annotations
+
 from typing import Dict, Tuple
 
 import numpy as np

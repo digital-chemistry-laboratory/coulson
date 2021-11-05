@@ -1,4 +1,7 @@
 """Constants and data."""
+
+from __future__ import annotations
+
 import scipy.constants
 
 EV = scipy.constants.eV

@@ -1,5 +1,7 @@
 """Parameters for Hückel calculations with helper functions."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Dict, FrozenSet
 

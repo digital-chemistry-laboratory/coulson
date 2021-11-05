@@ -1,4 +1,7 @@
 """Helper functions and classes."""
+
+from __future__ import annotations
+
 from dataclasses import dataclass
 from importlib import import_module
 from typing import Callable, List, NoReturn, Sequence

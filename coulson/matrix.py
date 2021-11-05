@@ -1,5 +1,7 @@
 """Creating Hückel matrices."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Optional, Sequence, Tuple
 

@@ -1,5 +1,6 @@
 """Code related to configuration interaction."""
 
+from __future__ import annotations
 
 import itertools
 from typing import Sequence, Tuple

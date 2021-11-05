@@ -1,4 +1,7 @@
 """Hückel calculator."""
+from __future__ import annotations
+
+from collections.abc import Collection
 import itertools
 from typing import Sequence
 
@@ -36,7 +39,7 @@ class HuckelCalculator:
     def __init__(
         self,
         huckel_matrix: Sequence[Sequence],
-        electrons: int,
+        electrons: Collection[int],
         charge: int = 0,
         multiplicity: int = None,
         n_dec_degen: int = 3,

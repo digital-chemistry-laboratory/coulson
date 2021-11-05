@@ -1,5 +1,7 @@
 """Interfaces to other programs."""
 
+from __future__ import annotations
+
 import functools
 import itertools
 import typing
