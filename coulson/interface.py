@@ -110,27 +110,27 @@ def assign_atom_types(  # noqa: C901
     to_remove = []
     for i, (symbol, degree) in enumerate(zip(symbols, degrees)):
         if symbol == "H":
-            atom_types.append(None)
+            atom_types.append("H")
             to_remove.append(i)
         elif symbol in ["N", "P"]:
             if degree == 1:
                 atom_types.append(symbol + "1")
-            if degree == 2:
+            elif degree == 2:
                 atom_types.append(symbol + "1")
-            if degree == 3:
+            elif degree == 3:
                 atom_types.append(symbol + "2")
-            if degree == 4:
+            else:
                 raise NotImplementedError(
-                    f"Tetracoordinate {symbol} is not implemented!"
+                    f"{symbol} with degree {degree} is not implemented!"
                 )
         elif symbol in ["O", "S"]:
             if degree == 1:
                 atom_types.append(symbol + "1")
-            if degree == 2:
+            elif degree == 2:
                 atom_types.append(symbol + "2")
-            if degree > 2:
+            else:
                 raise NotImplementedError(
-                    f"{degree}-coordinate {symbol} is not implemented!"
+                    f"{symbol} with degree {degree} is not implemented!"
                 )
         elif symbol in ["C", "Si"]:
             if degree != 4:
@@ -139,14 +139,19 @@ def assign_atom_types(  # noqa: C901
                 to_remove.append(i)
                 atom_types.append(None)
         elif symbol == "B":
-            if degree == 4:
-                raise NotImplementedError(
-                    f"Tetracoordinate {symbol} is not implemented!"
-                )
-            else:
+            if degree == 3:
                 atom_types.append(symbol)
+            else:
+                raise NotImplementedError(
+                    f"{symbol} with degree {degree} is not implemented!"
+                )
         elif symbol in ["F", "Cl"]:
-            atom_types.append(symbol)
+            if degree == 1:
+                atom_types.append(symbol)
+            else:
+                raise NotImplementedError(
+                    f"{symbol} with degree {degree} is not implemented!"
+                )
         else:
             raise NotImplementedError(f"Atom type {symbol} is not implemented!")
     to_remove = np.array(to_remove, dtype=int)
@@ -326,7 +331,7 @@ def process_coordinates(
     connectivity_matrix = connectivity_from_coordinates(
         symbols, coordinates, scale=radii_scale
     )
-    degrees = np.sum(connectivity_matrix, axis=0)
+    degrees = np.sum(connectivity_matrix, axis=0, dtype=int)
 
     # Generate input data
     input_data, mask = generate_input_data(
