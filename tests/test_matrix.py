@@ -24,7 +24,7 @@ from coulson.matrix import prepare_huckel_matrix
                 [0, 1, 0, 1],
                 [0, 0, 1, 0],
             ],
-            4,
+            [1, 1, 1, 1],
         ),
         (
             ["N1", "C", "C", "C", "C", "C"],
@@ -44,7 +44,7 @@ from coulson.matrix import prepare_huckel_matrix
                 [0.0, 0.0, 0.0, 1.0, 0.0, 1.0],
                 [1.02, 0.0, 0.0, 0.0, 1.0, 0.0],
             ],
-            6,
+            [1, 1, 1, 1, 1, 1],
         ),
     ],
 )

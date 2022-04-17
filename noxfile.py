@@ -6,27 +6,17 @@ from nox.sessions import Session
 package = "coulson"
 nox.options.sessions = "lint", "tests", "mypy"  # default session
 locations = "coulson", "tests", "noxfile.py"  # Linting locations
-pyversions = ["3.8", "3.9"]
+pyversions = ["3.8", "3.9", "3.10"]
 
 
 # Testing
-@nox.session(venv_backend="conda", python=pyversions)
+@nox.session(venv_backend="mamba", python=pyversions)
 def tests(session: Session) -> None:
     """Run tests."""
     args = session.posargs or ["--cov", "--import-mode=importlib", "-s"]
-    session.run(
-        "conda",
-        "env",
-        "update",
-        "--prefix",
-        session.virtualenv.location,
-        "--file",
-        "environment.yml",
-        silent=False,
-    )
     session.conda_install("pytest", "pytest-cov")
-    session.conda_install("rdkit")
-    session.install("-e", ".", "--no-deps")
+    session.conda_install("networkx", "numpy", "rdkit", "scipy")
+    session.install(".", "--no-deps")
     session.run("pytest", *args)
 
 

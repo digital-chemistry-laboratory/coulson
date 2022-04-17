@@ -1,6 +1,6 @@
 import setuptools
 
-with open("README.rst", "r", encoding="utf-8") as fh:
+with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
@@ -10,7 +10,7 @@ setuptools.setup(
     author_email="kjell.jorner@gmail.com",
     description="Program for Hückel molecular orbital theory and aromaticity",
     long_description=long_description,
-    long_description_content_type="text/x-rst",
+    long_description_content_type="text/x-markdown",
     url="",
     packages=setuptools.find_packages(),
     install_requires=["numpy", "networkx", "scipy"],
