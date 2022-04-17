@@ -1,5 +1,5 @@
 name: coulson
 dependencies:
-- numpy
-- networkx
-- scipy
+  - numpy
+  - networkx
+  - scipy
