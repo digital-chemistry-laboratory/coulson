@@ -25,7 +25,7 @@ def tests(session: Session) -> None:
 def lint(session: Session) -> None:
     """Lint code."""
     args = session.posargs or locations
-    session.conda_install(
+    session.install(
         "flake8",
         "flake8-black",
         "flake8-bugbear",
@@ -42,7 +42,7 @@ def lint(session: Session) -> None:
 def black(session: Session) -> None:
     """Format code."""
     args = session.posargs or locations
-    session.conda_install("black")
+    session.install("black")
     session.run("black", *args)
 
 
@@ -51,5 +51,5 @@ def black(session: Session) -> None:
 def mypy(session: Session) -> None:
     """Run the static type checker."""
     args = session.posargs or locations
-    session.conda_install("mypy")
+    session.install("mypy")
     session.run("mypy", *args)
