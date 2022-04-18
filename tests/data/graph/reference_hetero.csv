@@ -1,0 +1,36 @@
+name,smiles,charge,tre,p_tre
+Furan,C1=COC=C1,0,0.136,1.517
+Pyrrole,C1=CNC=C1,0,0.2462,3.095
+Thiophene,C1=CSC=C1,0,0.1965,2.732
+Pyrazole,C1=CNN=C1,0,0.2664,3.081
+Imidazole,C1=CN=CN1,0,0.2431,2.817
+Thiazole,C1=CSC=N1,0,0.1961,2.496
+Oxazole,C1=COC=N1,0,0.136,1.416
+Isoxazole,C1=CON=C1,0,0.1608,1.668
+Pyridine,C1=CC=NC=C1,0,0.2685,3.217
+Pyrimidine,C1=CN=CN=C1,0,0.2576,2.872
+Pyrazine,C1=CN=CC=N1,0,0.2716,3.042
+Pyridazine,C1=CC=NN=C1,0,0.2757,3.071
+"1,3,5-Triazine",C1=NC=NC=N1,0,0.2411,2.509
+"Furo[2,3-b]furan",C1=COC2=C1C=CO2,0,0.2279,1.435
+"Furo[3,2-b]furan",C1=COC2=C1OC=C2,0,0.224,1.406
+"Furo[3,4-b]furan",C1=COC2=COC=C21,0,0.165,1.042
+"Pyrrolo[2,3-b]pyrrole",C12=C(C=CN2)C=CN1,0,0.3795,2.744
+"Pyrrolo[3,2-b]pyrrole",C12=C(NC=C2)C=CN1,0,0.3849,2.783
+"Pyrrolo[3,4-b]pyrrole",C12=CNC=C1NC=C2,0,0.3319,2.415
+"Thieno[2,3-b]thiophene",C1=CSC2=C1C=CS2,0,0.3093,2.509
+"Thieno[3,2-b]thiophene",C1=CSC2=C1SC=C2,0,0.3107,2.515
+"Thieno[3,4-b]thiophene",C1=CSC2=CSC=C21,0,0.2508,2.044
+Benzo[b]furan,C1=CC=C2C(=C1)C=CO2,0,0.3216,2.195
+Benzo[c]furan,C1=CC2=COC=C2C=C1,0,0.2196,1.524
+Indole,C1=CC=C2C(=C1)C=CN2,0,0.3763,2.763
+Isoindole,C1=CC2=CNC=C2C=C1,0,0.3266,2.426
+Indolizine,C1=CC2=CC=CN2C=C1,0,0.3088,2.312
+Benzo[b]thiophene,C1=CC=C2C(=C1)C=CS2,0,0.3485,2.708
+Benzo[c]thiophene,C1=CC2=CSC=C2C=C1,0,0.2843,2.242
+Quinoline,C1=CC=C2C(=C1)C=CC=N2,0,0.3844,2.763
+Isoquinoline,C1=CC=C2C=NC=CC2=C1,0,0.3846,2.765
+Carbazole,C1=CC=C2C(=C1)C3=CC=CC=C3N2,0,0.5515,2.86
+Acridine,C1=CC=C2C(=C1)C=C3C=CC=CC3=N2,0,0.4714,2.422
+Free-base porphine,C1=CC2=CC5=CC=C(C=C4C=CC(C=C3C=CC(=CC1=N2)N3)=N4)N5,0,0.4322,1.17
+M(II) porphyrin,C12=N/C(C=C2)=C\C3=N/C(C=C3)=C\C4=N/C(C=C4)=C\C5=N/C(C=C5)=C\1,-2,0.4744,1.367
