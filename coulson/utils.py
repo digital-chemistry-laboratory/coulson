@@ -7,10 +7,55 @@ from importlib import import_module
 from typing import Callable, List, NoReturn, Sequence
 
 import networkx as nx
+import numpy as np
+
+from coulson.typing import Array1DInt, ArrayLike2D
+
+
+def get_multiplicity(n_electrons: int) -> int:
+    """Set multiplicity based on number of electrons.
+
+    Args:
+        n_electrons: Number of electrons
+
+    Returns:
+        multiplicity: Multiplicity
+
+    Raises:
+        ValueError: If number of electrons and multiplicity does not match
+    """
+    multiplicity = (n_electrons % 2) + 1
+
+    if (n_electrons % 2) == (multiplicity % 2):
+        raise ValueError(
+            f"Combination of number of electrons {n_electrons} "
+            f"and multiplicity {multiplicity} not possible!"
+        )
+    return multiplicity
+
+
+def occupations_from_multiplicity(
+    n_electrons: int, n_orbitals: int, multiplicity: int
+) -> Array1DInt:
+    """Simple occupation calculator which does not take degeneracies into account.
+
+    Args:
+        n_electrons: Number of electrons
+        n_orbitals: Number of orbitals
+        multiplicity: Multiplicity
+
+    Returns:
+        occupations: Orbital occupations
+    """
+    n_singly = multiplicity - 1
+    n_doubly = int((n_electrons - n_singly) / 2)
+    n_empty = n_orbitals - n_doubly - n_singly
+    occupations: Array1DInt = np.array([2] * n_doubly + [1] * n_singly + [0] * n_empty)
+    return occupations
 
 
 def rings_from_connectivity(
-    connectivity_matrix: Sequence[Sequence[int]],
+    connectivity_matrix: ArrayLike2D,
 ) -> List[List[int]]:
     """Return rings in graph sorted by length.
 
@@ -41,8 +86,8 @@ class Import:
     """Class for handling optional dependency imports."""
 
     module: str
-    item: str = None
-    alias: str = None
+    item: str | None = None
+    alias: str | None = None
 
 
 def requires_dependency(imports: Sequence, _globals: dict) -> Callable:  # noqa: C901

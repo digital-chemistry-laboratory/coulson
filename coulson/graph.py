@@ -2,16 +2,58 @@
 
 from __future__ import annotations
 
+from typing import Iterable
+
 import networkx as nx
 import numpy as np
 
-from coulson.typing import ArrayLike2D
+from coulson.typing import Array1DInt, Array2DFloat, ArrayLike2D
+from coulson.utils import get_multiplicity, occupations_from_multiplicity
+
+
+def calculate_bre(
+    huckel_matrix: ArrayLike2D,
+    n_electrons: int,
+    indices: Iterable[tuple[int, int]],
+    multiplicity: int | None = None,
+) -> float:
+    """Calculate bond resonance energy according to recipe of Aihara.
+
+    Args:
+        huckel_matrix: Hückel matrix
+        n_electrons: Number of electrons
+        indices: Tuples of atom indices (1-indexed)
+        multiplicity: Multiplicity
+
+    Returns:
+        bre: Bond resonance energy
+    """
+    huckel_matrix: Array2DFloat = np.array(huckel_matrix)
+    n_atoms = huckel_matrix.shape[0]
+
+    # Set multiplicity
+    if multiplicity is None:
+        multiplicity = get_multiplicity(n_electrons)
+
+    # Set occupations
+    occupations = occupations_from_multiplicity(n_electrons, n_atoms, multiplicity)
+
+    # Calculate reference roots
+    ref_roots, _ = np.linalg.eigh(huckel_matrix)
+    huckel_matrix = huckel_matrix.astype(complex)
+    for i, j in indices:
+        huckel_matrix[i - 1, j - 1] *= 1j
+        huckel_matrix[j - 1, i - 1] *= -1j
+    bre_roots, _ = np.linalg.eigh(huckel_matrix)
+    bre = sum((bre_roots - ref_roots) * occupations)
+
+    return bre
 
 
 def calculate_tre(
     huckel_matrix: ArrayLike2D,
     n_electrons: int,
-    multiplicity: int = None,
+    multiplicity: int | None = None,
 ) -> tuple[float, float]:
     """Calculate topological resonance energy according to the recipe of Aihara.
 
@@ -25,44 +67,28 @@ def calculate_tre(
     Returns:
         tre: Topological resonance energy
         p_tre: Percentage topological resonance energy
-
-    Raises:
-        ValueError: If number of electrons and multiplicity does not match
     """
-    huckel_matrix = np.asarray(huckel_matrix)
+    huckel_matrix: Array2DFloat = np.asarray(huckel_matrix)
     n_atoms = huckel_matrix.shape[0]
 
     # Set multiplicity
     if multiplicity is None:
-        multiplicity = (n_electrons % 2) + 1
+        multiplicity = get_multiplicity(n_electrons)
 
-    # Multiplicity check
-    if (n_electrons % 2) == (multiplicity % 2):
-        raise ValueError(
-            f"Combination of number of electrons {n_electrons} "
-            f"and multiplicity {multiplicity} not possible!"
-        )
     # Set occupations
-    # TODO: Might set better occupations for degenerate orbitals
-    n_singly = multiplicity - 1
-    n_doubly = int((n_electrons - n_singly) / 2)
-    n_empty = n_atoms - n_doubly - n_singly
-    occupations = np.array([2] * n_doubly + [1] * n_singly + [0] * n_empty)
+    occupations = occupations_from_multiplicity(n_electrons, n_atoms, multiplicity)
 
     # Set up graph and set weights
     G = nx.Graph(huckel_matrix)
-    # nx.set_node_attributes(
-    #    G, {i: j for i, j in enumerate(np.diag(huckel_matrix))}, "weight"
-    # )
 
     # Calculate charateristic polynomial
     cp = np.poly(huckel_matrix)
-    cp_roots = np.sort(np.roots(cp).real)[::-1]
+    cp_roots = np.sort(np.roots(cp))[::-1]
     cp_energy = np.sum(cp_roots * occupations)
 
     # Calculate matching polynomial
     mp = matching_polynomial(G)
-    mp_roots = mp.roots().real[::-1]
+    mp_roots = mp.roots()[::-1]  # type: ignore
     mp_energy = np.sum(mp_roots * occupations)
 
     # Calculate topological resonance energy
@@ -106,7 +132,7 @@ def matching_polynomial(g: nx.Graph) -> np.polynomial.Polynomial:
     graphs = [(g, 1)]
 
     # Cut graph into linear pieces and evaluate their matching polynomials
-    mp = np.polynomial.Polynomial(0)
+    mp = np.polynomial.Polynomial(0)  # type: ignore
     while graphs:
         # Create a working graph
         w_g, factor = graphs.pop()
@@ -123,7 +149,7 @@ def matching_polynomial(g: nx.Graph) -> np.polynomial.Polynomial:
                 (w_g.has_edge(i, i), w_g.has_edge(j, j)) for i, j in edge_candidates
             ]
             n_weights = np.sum(weights, axis=1)
-            n_neighbors = np.array(
+            n_neighbors: Array1DInt = np.array(
                 [n_neighbors_edge(w_g, edge) for edge in edge_candidates]
             )
             idx = np.lexsort((n_neighbors, n_weights), axis=0)[0]
@@ -157,7 +183,7 @@ def matching_polynomial(g: nx.Graph) -> np.polynomial.Polynomial:
             graphs.append((n_g_2, -1 * factor * e_weight**2))
         else:
             # Create matching polynomial directly from array for acyclic structure
-            poly = np.polynomial.Polynomial(np.poly(nx.to_numpy_array(w_g))[::-1])
+            poly = np.polynomial.Polynomial(np.poly(nx.to_numpy_array(w_g))[::-1])  # type: ignore
             mp += factor * poly
 
     return mp

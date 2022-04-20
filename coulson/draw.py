@@ -7,6 +7,7 @@ from typing import Optional, Sequence, Tuple, Union
 
 import numpy as np
 
+from coulson.typing import Array1DFloat, Array1DInt
 from coulson.utils import Import, requires_dependency
 
 if typing.TYPE_CHECKING:  # pragma: no cover
@@ -23,7 +24,7 @@ if typing.TYPE_CHECKING:  # pragma: no cover
 )
 def draw_orbital_energies(  # noqa: C901
     energies: Sequence[float],
-    occupations: Sequence[float] = None,
+    occupations: Sequence[float] | None = None,
     fig_size: Tuple[float, float] = (8, 12),
 ) -> Tuple["plt.Figure", "plt.Axes"]:
     """Draw orbital energy diagram.
@@ -53,19 +54,20 @@ def draw_orbital_energies(  # noqa: C901
 
     # Calculate offsets
     energies = np.round(energies, 3)
+    energies_unique: Array1DFloat
+    degeneracies: Array1DInt
     energies_unique, degeneracies = np.unique(energies, return_counts=True)
 
-    line_offsets = []
+    line_offsets: list[int] = []
     for degeneracy in degeneracies:
         if degeneracy == 1:
-            offset = [0]
+            line_offsets.extend([0])
         elif degeneracy == 2:
-            offset = [-1, 1]
+            line_offsets.extend([-1, 1])
         else:
             raise ValueError(
                 f"Given degeneracy {degeneracy} > maximum supported degeneracy of 2."
             )
-        line_offsets.extend(offset)
 
     # Draw orbital energy levels
     ax.eventplot(
@@ -138,7 +140,7 @@ def draw_mol(
     bond_labels: Optional[Sequence] = None,
     highlighted_atoms: Optional[Sequence] = None,
     highlighted_bonds: Optional[Sequence] = None,
-    size: Tuple[int] = (400, 400),
+    size: tuple[int, int] = (400, 400),
     n_decimals: int = 3,
     img_format: str = "svg",
 ) -> Union[str, bytes]:
@@ -208,6 +210,6 @@ def draw_mol(
     )
 
     d2d.FinishDrawing()
-    drawing_text = d2d.GetDrawingText()
+    drawing_text: str | bytes = d2d.GetDrawingText()
 
     return drawing_text
