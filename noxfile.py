@@ -47,9 +47,10 @@ def black(session: Session) -> None:
 
 
 # Static typing
-@nox.session(python="3.9")
+@nox.session(venv_backend="mamba", python="3.9")
 def mypy(session: Session) -> None:
     """Run the static type checker."""
     args = session.posargs or locations
-    session.install("mypy")
+    session.conda_install("mypy")
+    session.conda_install("networkx", "numpy", "rdkit", "scipy")
     session.run("mypy", *args)

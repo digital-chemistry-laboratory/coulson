@@ -34,7 +34,7 @@ if typing.TYPE_CHECKING:  # pragma: no cover
 
 
 @requires_dependency([Import(module="pyscf")], globals())
-def get_pyscf_mf(ppp: PPPCalculator, spin: float | None = None) -> Any:
+def get_pyscf_mf(ppp: PPPCalculator, spin: float | None = None) -> pyscf.scf.HF:
     """Converts PPP calculator object into PySCF SCF object.
 
     Args:
@@ -70,7 +70,7 @@ def get_pyscf_mf(ppp: PPPCalculator, spin: float | None = None) -> Any:
     fock_matrix = ppp.fock_matrix
 
     def energy_tot(
-        self: Any,
+        self: pyscf.scf.HF,
         dm: Array2DFloat | None = None,
         h1e: Any | None = None,
         vhf: Any | None = None,
@@ -282,7 +282,7 @@ def determine_angles(  # noqa: C901
                     break
                 if method == "cos":
                     # Get normal vectors and determine dihedral angle
-                    # TODO: Remove type ignores when https://github.com/numpy/numpy/pull/21216 is released
+                    # TODO: Remove type ignores when https://github.com/numpy/numpy/pull/21216 is released  # noqa: B950
                     n_i: Array1DFloat = np.cross(v_ik, v_ij)
                     n_i /= np.linalg.norm(n_i)  # type: ignore
                     n_j: Array1DFloat = np.cross(v_jl, v_ji)

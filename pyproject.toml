@@ -37,5 +37,3 @@ warn_return_any = true
 warn_unused_configs = true
 warn_unreachable = true
 show_traceback = true
-plugins = "numpy.typing.mypy_plugin"
-
