@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Tuple
+import math
 
 import numpy as np
 import scipy.interpolate
@@ -16,10 +16,11 @@ from coulson.parameters import (
     N_STAR,
     Z_EFF,
 )
+from coulson.typing import Array1DFloat
 
 
 def z_eff_slater(
-    electrons: Dict[int, int], charge: float = 0, population: float = 1
+    electrons: dict[int, int], charge: float = 0, population: float = 1
 ) -> float:
     """Returns effective charge for p orbital according to Slater's rules.
 
@@ -38,7 +39,7 @@ def z_eff_slater(
     z = sum(electrons.values()) + charge + 1
 
     # Calcualte shielding
-    s = 0
+    s = 0.0
     for n, n_electrons in electrons.items():
         if n < n_max - 1:
             s += n_electrons * 1
@@ -73,7 +74,7 @@ def _overlap_from_interpolation(
         (n_1, n_2), scipy.interpolate.SmoothBivariateSpline._from_tck(TCK[(n_1, n_2)])
     )
 
-    overlap = spl.ev([p], [t], dx=dp)[0]
+    overlap: float = spl.ev([p], [t], dx=dp)[0]
 
     return overlap
 
@@ -95,11 +96,12 @@ def _overlap_from_formula(  # noqa: C901
         overlap: Overlap integral
     """
     # Use special formulas for p = 0
+    overlap: float
     if p == 0:
         if n_1 == n_2 == 2:
-            overlap = (1 - t ** 2) ** (5 / 2)
+            overlap = (1 - t**2) ** (5 / 2)
         elif n_1 == n_2 == 3:
-            overlap = (1 - t ** 2) ** (7 / 2)
+            overlap = (1 - t**2) ** (7 / 2)
         elif (n_1 == 2) and (n_2 == 3):
             overlap = ((5 / 6) * (1 + t) ** 5 * (1 - t) ** 7) ** (1 / 2)
 
@@ -107,16 +109,16 @@ def _overlap_from_formula(  # noqa: C901
     if t == 0 and (n_1 == n_2):
         # 2p-2p
         if n_1 == n_2 == 2:
-            overlap = np.exp(-p) * (1 + p + (2 / 5) * p ** 2 + (1 / 15) * p ** 3)
+            overlap = np.exp(-p) * (1 + p + (2 / 5) * p**2 + (1 / 15) * p**3)
         # 3p-3p
         if n_1 == n_2 == 3:
             overlap = np.exp(-p) * (
                 1
                 + p
-                + (34 / 75) * p ** 2
-                + (3 / 25) * p ** 3
-                + (31 / 1575) * p ** 4
-                + (1 / 525) * p ** 5
+                + (34 / 75) * p**2
+                + (3 / 25) * p**3
+                + (31 / 1575) * p**4
+                + (1 / 525) * p**5
             )
     # Use general formulas for unequal exponents
     else:
@@ -126,8 +128,8 @@ def _overlap_from_formula(  # noqa: C901
         if n_1 == n_2 == 2:
             overlap = (
                 (1 / 32)
-                * p ** 5
-                * (1 - t ** 2) ** (5 / 2)
+                * p**5
+                * (1 - t**2) ** (5 / 2)
                 * (
                     A(4, p) * (B(0, pt) - B(2, pt))
                     + A(2, p) * (B(4, pt) - B(0, pt))
@@ -140,14 +142,14 @@ def _overlap_from_formula(  # noqa: C901
                 overlap = (
                     1
                     / (120 * np.sqrt(30))
-                    * p ** 6
+                    * p**6
                     * (5 * A(5, p) - 6 * A(3, p) + A(1, p))
                 )
             else:
                 overlap = (
                     1
                     / (32 * np.sqrt(30))
-                    * p ** 6
+                    * p**6
                     * (1 + t) ** (5 / 2)
                     * (1 - t) ** (7 / 2)
                     * (
@@ -164,8 +166,8 @@ def _overlap_from_formula(  # noqa: C901
             overlap = (
                 1
                 / 960
-                * p ** 7
-                * (1 - t ** 2) ** (7 / 2)
+                * p**7
+                * (1 - t**2) ** (7 / 2)
                 * (
                     A(6, p) * (B(0, pt) - B(2, pt))
                     + A(4, p) * (2 * B(4, pt) - B(0, pt) - B(2, pt))
@@ -176,7 +178,7 @@ def _overlap_from_formula(  # noqa: C901
     return overlap
 
 
-def _calculate_pt(r: float, exp_1: float, exp_2: float) -> Tuple[float, float]:
+def _calculate_pt(r: float, exp_1: float, exp_2: float) -> tuple[float, float]:
     """Calculates p and t parameters.
 
     Formulas from 10.1063/1.1747150.
@@ -198,7 +200,7 @@ def _calculate_pt(r: float, exp_1: float, exp_2: float) -> Tuple[float, float]:
 
 def _sort_orbitals(
     n_1: int, n_2: int, exp_1: float, exp_2: float
-) -> Tuple[int, int, float, float]:
+) -> tuple[int, int, float, float]:
     """Sort atoms for use with Mulliken's STO orbital overlap formulas.
 
     Rules as given in 10.1063/1.1747150.
@@ -289,10 +291,13 @@ def slater_overlap_grad(
 
     Returns:
         gradient: Gradient of orbital overlap integral
+
+    Raises:
+        ValueError: If method not supported.
     """
     # Use numerical differentiation for formula approach
     if method == "formula":
-        gradient = scipy.misc.derivative(
+        gradient: float = scipy.misc.derivative(
             lambda x: slater_overlap(x, n_1, n_2, exp_1, exp_2, method=method),
             r,
             n=1,
@@ -312,6 +317,8 @@ def slater_overlap_grad(
 
         # Calculate gradient
         gradient = ds_dp * dp_dr
+    else:
+        raise ValueError("Supported methods are: 'formula', 'interpolation'.")
 
     return gradient
 
@@ -378,27 +385,29 @@ def get_exp_bv(gamma: float) -> float:
 
 def A(k: int, p: float) -> float:
     """Helper function for Slater orbital overlap."""
-    summed = 0
+    summed = 0.0
     for i in range(1, k + 2):
-        summed += np.math.factorial(k) / (p ** i * np.math.factorial(k - i + 1))
-    return np.exp(-p) * summed
+        summed += math.factorial(k) / (p**i * math.factorial(k - i + 1))
+    result: float = np.exp(-p) * summed
+    return result
 
 
 def B(k: int, pt: float) -> float:
     """Helper function for Slater orbital overlap."""
-    summed_1 = 0
-    summed_2 = 0
+    summed_1 = 0.0
+    summed_2 = 0.0
     for i in range(1, k + 2):
-        term = np.math.factorial(k) / ((pt) ** i * np.math.factorial(k - i + 1))
+        term = math.factorial(k) / ((pt) ** i * math.factorial(k - i + 1))
         summed_1 += term
         summed_2 += (-1) ** (k - i) * term
-    return -np.exp(-pt) * summed_1 - np.exp(pt) * summed_2
+    result: float = -np.exp(-pt) * summed_1 - np.exp(pt) * summed_2
+    return result
 
 
 # 2,3 used p from -1.0 to 10.0, t from -0.7 to 0.7
 # 2,2 and 3,3 used p from -1.0 to 10.0 and t from -0.1 to 0.7
 # All with grid spacing of 0.025 in both directions.
-TCK = {
+TCK: dict[tuple[int, int], Array1DFloat] = {
     (2, 3): (
         np.array(
             [
@@ -630,5 +639,5 @@ TCK = {
 }
 """dict: Data to construct spline interpolators."""
 
-spls = {}
+spls: dict[tuple[int, int], scipy.interpolate.SmoothBivariateSpline] = {}
 """dict: Placeholder for spline interpolators."""

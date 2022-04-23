@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 import typing
-from typing import Optional, Sequence, Tuple, Union
 
 import numpy as np
 
-from coulson.typing import Array1DFloat, Array1DInt
+from coulson.typing import Array1DFloat, Array1DInt, ArrayLike1D
 from coulson.utils import Import, requires_dependency
 
 if typing.TYPE_CHECKING:  # pragma: no cover
@@ -23,10 +23,10 @@ if typing.TYPE_CHECKING:  # pragma: no cover
     globals(),
 )
 def draw_orbital_energies(  # noqa: C901
-    energies: Sequence[float],
-    occupations: Sequence[float] | None = None,
-    fig_size: Tuple[float, float] = (8, 12),
-) -> Tuple["plt.Figure", "plt.Axes"]:
+    energies: ArrayLike1D,
+    occupations: Iterable[int] | None = None,
+    fig_size: tuple[float, float] = (8, 12),
+) -> tuple[plt.Figure, plt.Axes]:
     """Draw orbital energy diagram.
 
     Args:
@@ -131,19 +131,19 @@ def draw_orbital_energies(  # noqa: C901
     ],
     globals(),
 )
-def draw_mol(
+def draw_mol(  # noqa: C901
     mol: "Chem.Mol",
-    properties: Optional[Sequence] = None,
+    properties: Iterable[float] | None = None,
     atom_numbers: bool = True,
-    atom_labels: Optional[Sequence] = None,
+    atom_labels: Iterable[float] | None = None,
     bond_numbers: bool = False,
-    bond_labels: Optional[Sequence] = None,
-    highlighted_atoms: Optional[Sequence] = None,
-    highlighted_bonds: Optional[Sequence] = None,
+    bond_labels: Iterable[float] | None = None,
+    highlighted_atoms: Iterable[int] | None = None,
+    highlighted_bonds: Iterable[int] | None = None,
     size: tuple[int, int] = (400, 400),
     n_decimals: int = 3,
     img_format: str = "svg",
-) -> Union[str, bytes]:
+) -> str | bytes:
     """Draw molecule with RDKit.
 
     Args:
@@ -169,8 +169,10 @@ def draw_mol(
     Chem.Draw.rdDepictor.SetPreferCoordGen(True)
 
     # Set mutable default arguments
-    highlighted_atoms = highlighted_atoms or []
-    highlighted_bonds = highlighted_bonds or []
+    if highlighted_atoms is None:
+        highlighted_atoms = []
+    if highlighted_bonds is None:
+        highlighted_bonds = []
 
     # Copy mol object to prevent editing it in place
     mol = Chem.Mol(mol)

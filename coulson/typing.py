@@ -19,6 +19,7 @@ Array1DAny = Any
 Array1DFloat = Any  # NDArray[np.float_]
 Array2DFloat = Any  # NDArray[np.float_]
 Array3DFloat = Any  # NDArray[np.float_]
+Array4DFloat = Any  # NDArray[np.float_]
 Array1DInt = Any  # NDArray[np.int_]
 Array2DInt = Any  # NDArray[np.int_]
 Array3DInt = Any  # NDArray[np.int_]

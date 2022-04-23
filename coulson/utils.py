@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from importlib import import_module
-from typing import Callable, List, NoReturn, Sequence
+from typing import Callable, NoReturn, Sequence
 
 import networkx as nx
 import numpy as np
@@ -56,7 +56,7 @@ def occupations_from_multiplicity(
 
 def rings_from_connectivity(
     connectivity_matrix: ArrayLike2D,
-) -> List[List[int]]:
+) -> list[list[int]]:
     """Return rings in graph sorted by length.
 
     Args:
@@ -90,7 +90,9 @@ class Import:
     alias: str | None = None
 
 
-def requires_dependency(imports: Sequence, _globals: dict) -> Callable:  # noqa: C901
+def requires_dependency(  # noqa: C901
+    imports: Sequence[Import], _globals: dict
+) -> Callable:
     """Decorator factory to control optional dependencies.
 
     Args:

@@ -297,12 +297,29 @@ class Parameters:
     h_x: Dict[str, float]
     k_xy: Dict[FrozenSet[str], float]
 
-    def get_h_x(self, atom_type):
+    def get_h_x(self, atom_type: str) -> float:
+        """Return the h_x parameter for atom type.
+
+        Args:
+            atom_type: Atom type
+
+        Returns:
+            h_x: h_x parameter
+        """
         h_x = self.h_x[atom_type]
 
         return h_x
 
-    def get_k_xy(self, atom_type_1, atom_type_2):
+    def get_k_xy(self, atom_type_1: str, atom_type_2: str) -> float:
+        """Get k_xy parameter for two atom types.
+
+        Args:
+            atom_type_1: First atom type
+            atom_type_2: Second atom type
+
+        Returns:
+            k_xy: k_xy parameter
+        """
         key = frozenset([atom_type_1, atom_type_2])
         k_xy = self.k_xy[key]
 

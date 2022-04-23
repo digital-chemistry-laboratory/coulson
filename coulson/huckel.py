@@ -1,12 +1,19 @@
 """Hückel calculator."""
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Iterable
 import itertools
 from typing import Sequence
 
 import numpy as np
 
+from coulson.typing import (
+    Array1DFloat,
+    Array1DInt,
+    Array2DFloat,
+    Array2DInt,
+    ArrayLike2D,
+)
 from coulson.utils import rings_from_connectivity
 
 
@@ -36,15 +43,31 @@ class HuckelCalculator:
         spin_occupations: Orbitals occupations of unpaired electrons
     """
 
+    bo_matrix: Array2DFloat
+    charges: Array1DFloat
+    coefficients: Array2DFloat
+    energies: Array1DFloat
+    multiplicity: int
+    electrons: Iterable[int]
+    n_electrons: int
+    n_occupied: int
+    n_orbitals: int
+    n_unpaired: int
+    occupations: Array1DFloat
+    spin_densities: Array1DFloat
+    spin_occupations: Array1DFloat
+    _D: Array2DFloat
+    _D_spin: Array2DFloat
+
     def __init__(
         self,
-        huckel_matrix: Sequence[Sequence],
-        electrons: Collection[int],
+        huckel_matrix: ArrayLike2D,
+        electrons: Iterable[int],
         charge: int = 0,
-        multiplicity: int = None,
+        multiplicity: int | None = None,
         n_dec_degen: int = 3,
     ) -> None:
-        huckel_matrix = np.array(huckel_matrix)
+        huckel_matrix: Array2DFloat = np.array(huckel_matrix)
         self.huckel_matrix = huckel_matrix
 
         # Set up number of electrons
@@ -52,7 +75,7 @@ class HuckelCalculator:
         n_electrons = sum(electrons) - charge
 
         # Create connectivity matrix
-        connectivity_matrix = np.array(huckel_matrix)
+        connectivity_matrix: Array2DInt = np.array(huckel_matrix)
         np.fill_diagonal(connectivity_matrix, 0)
         connectivity_matrix[connectivity_matrix.nonzero()] = 1
         self.connectivity_matrix = connectivity_matrix
@@ -73,15 +96,6 @@ class HuckelCalculator:
         self.n_excess_spin = multiplicity - 1
         self.multiplicity = multiplicity
         self.n_electrons = n_electrons
-        self.n_occupied = None
-        self.energies = None
-        self.occupations = None
-        self.spin_occupations = None
-        self.charges = None
-        self.spin_densities = None
-        self.bo_matrix = None
-        self._D = None
-        self._D_spin = None
         self.n_dec_degen = n_dec_degen
 
         # Make calculations
@@ -99,13 +113,13 @@ class HuckelCalculator:
         Returns:
             bo: Bond order
         """
-        bo = self.bo_matrix[i - 1, j - 1]
+        bo: float = self.bo_matrix[i - 1, j - 1]
 
         return bo
 
     def calculate_i_ring(
         self,
-        indices: Sequence,
+        indices: Iterable[int],
         normalize: bool = True,
         permute: bool = False,
         norm_method: str = "solà",
@@ -125,17 +139,17 @@ class HuckelCalculator:
             ValueError: When norm_method is not correct.
         """
         # Calculate I_ring
-        indices = list(indices)
+        indices = tuple(indices)
         n_atoms = len(indices)
 
         # Set up list of indices to calculate
         if permute is True:
-            i_ring_indices = itertools.permutations(indices, n_atoms)
+            i_ring_indices = list(itertools.permutations(indices, n_atoms))
         else:
             i_ring_indices = [indices]
 
         # Calculate I_ring
-        i_rings = []
+        i_rings: list[float] = []
         for indices in i_ring_indices:
             i_ring = 1
             for (i, j) in zip(indices, indices[1:] + indices[:1]):
@@ -187,6 +201,8 @@ class HuckelCalculator:
         # Loop over unique rounded orbital energies and degeneracies and fill with
         # electrons
         energies_rounded = self.energies.round(self.n_dec_degen)
+        unique_energies: Array1DFloat
+        degeneracies: Array1DInt
         unique_energies, degeneracies = np.unique(energies_rounded, return_counts=True)
         for energy, degeneracy in zip(np.flip(unique_energies), np.flip(degeneracies)):
             if len(all_electrons) == 0:
@@ -208,7 +224,7 @@ class HuckelCalculator:
                 spin_electrons / degeneracy
             )
 
-        n_occupied = np.count_nonzero(occupations)
+        n_occupied: int = np.count_nonzero(occupations)
         n_unpaired = int(
             np.sum(occupations[:n_occupied][occupations[:n_occupied] != 2])
         )

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 import itertools
-from typing import Any, Dict, Sequence
+from typing import Any
 
 import numpy as np
 import scipy.constants
@@ -34,6 +35,7 @@ from coulson.slater import (
     slater_overlap_grad,
     z_eff_slater,
 )
+from coulson.typing import Array1DFloat, Array2DFloat, Array2DInt, Array4DFloat
 
 
 def get_gamma_xx(atom_type: str, data: str = "beveridge-hinze") -> float:
@@ -60,8 +62,8 @@ def get_gamma_xx(atom_type: str, data: str = "beveridge-hinze") -> float:
 
 def get_gamma_xy(
     r: float,
-    gamma_11: float = None,
-    gamma_22: float = None,
+    gamma_11: float,
+    gamma_22: float,
     method: str = "beveridge-hinze",
 ) -> float:
     """Returns the two-center electron repulsion integral.
@@ -84,9 +86,9 @@ def get_gamma_xy(
     if method == "mataga-nishimoto":
         gamma_xy = 1 / (r + a)
     elif method == "ohno":
-        gamma_xy = 1 / np.sqrt(r ** 2 + a ** 2)
+        gamma_xy = 1 / np.sqrt(r**2 + a**2)
     elif method == "beveridge-hinze":
-        gamma_xy = 1 / (r + a * np.exp(-(r ** 2) / (2 * a ** 2)))
+        gamma_xy = 1 / (r + a * np.exp(-(r**2) / (2 * a**2)))
     else:
         raise ValueError(
             "Choose method from beveridge-hinze', 'mataga-nishimoto' or 'ohno'"
@@ -193,7 +195,9 @@ def get_beta_jug(
     overlap = slater_overlap(r, n_1, n_2, exp_1, exp_2, method=overlap_method)
     overlap_grad = slater_overlap_grad(r, n_1, n_2, exp_1, exp_2, method=overlap_method)
 
-    t_1 = overlap / 2 / np.sqrt(1 - overlap ** 2) * delta_r / r * (alpha_1 - alpha_2)
+    t_1: float = (
+        overlap / 2 / np.sqrt(1 - overlap**2) * delta_r / r * (alpha_1 - alpha_2)
+    )
     t_2 = overlap_grad / r
     beta = t_1 + t_2
 
@@ -256,12 +260,57 @@ class PPPCalculator:
         transition_dipole_moments: Transition dipole moments (a.u.)
     """
 
+    atom_types: Sequence[str]
+    charge: int
+    ci_coefficients: Array2DFloat
+    ci_energies: Array1DFloat
+    ci_matrix: Array2DFloat
+    coefficients: Array2DFloat
+    connectivity_matrix: Array2DInt
+    converged: bool
+    coordinates: Array2DFloat
+    core_matrix: Array2DFloat
+    density_matrix: Array2DFloat
+    distance_matrix: Array2DFloat
+    electronic_energy: float
+    electrons: list[int]
+    excitations: list[tuple[tuple[int, ...], tuple[int, ...], str]]
+    exponents: Array1DFloat
+    fock_matrix_mo: Array2DFloat
+    fock_matrix: Array2DFloat
+    gamma_matrix: Array2DFloat
+    hc: HuckelCalculator
+    homo_idx: int
+    ips: Array1DFloat
+    iter_densities: list[float]
+    iter_energies: list[float]
+    lumo_idx: int
+    mo_integrals: Array4DFloat
+    multiplicity: int
+    n_atoms: int
+    n_electrons: int
+    n_excitations: int
+    n_iter: int
+    n_occupied: int
+    n_orbitals: int
+    n_states: int
+    n_virtual: int
+    ns: list[int]
+    occupations: list[int]
+    oscillator_strengths: Array1DFloat
+    overlap_matrix: Array2DFloat
+    parametrization: Mapping[str, Any]
+    transition_densities: Array1DFloat
+    transition_dipole_moments: Array1DFloat
+    _iter_populations: list[Array1DFloat]
+    _populations_old: Array1DFloat | None
+
     def __init__(
         self,
         input_data: InputData,
         charge: int = 0,
-        multiplicity: int = None,
-        parametrization: Dict[str, Any] = None,
+        multiplicity: int | None = None,
+        parametrization: Mapping[str, Any] | None = None,
         overlap_method: str = "interpolation",
     ) -> None:
         # Process input data
@@ -312,13 +361,12 @@ class PPPCalculator:
         self.occupations = hc.occupations
         self.charge = charge
         self.atom_types = atom_types
-        self.connectivity_matrix = np.array(connectivity_matrix)
+        self.connectivity_matrix: Array2DInt = np.array(connectivity_matrix)
         self.distance_matrix = distance_matrix
-        self.coordinates = np.array(coordinates)
+        self.coordinates: Array2DFloat = np.array(coordinates)
         self.n_atoms = n_atoms
         self.hc = hc
         self.parametrization = parametrization
-        self.mo_integrals = None
 
         # Set up
         self._setup_ips()
@@ -369,7 +417,7 @@ class PPPCalculator:
                 exp_slater_from_z_eff(z_eff, n_star)
                 for z_eff, n_star in zip(self.z_effs, self.n_stars)
             ]
-        self.exponents = np.array(exponents)
+        self.exponents: Array1DFloat = np.array(exponents)
 
     def _get_beta(self, i: int, j: int) -> float:
         """Calculate beta.
@@ -543,7 +591,9 @@ class PPPCalculator:
         self.density_matrix = density_matrix
 
     def _calculate_total_energy(self) -> float:
-        energy = np.sum(self.density_matrix * (self.fock_matrix + self.core_matrix)) / 2
+        energy: float = (
+            np.sum(self.density_matrix * (self.fock_matrix + self.core_matrix)) / 2
+        )
         return energy
 
     def scf(  # noqa: C901
@@ -567,11 +617,11 @@ class PPPCalculator:
             ve_damping: Damping factor for VESCF iterations
             verbose: Whether to print for each iteration
         """
-        delta_e = 1
-        rmsd_d = 1
+        delta_e = 1.0
+        rmsd_d = 1.0
         n_iter = 0
         n_iter_ve = 0
-        energy = 0
+        energy = 0.0
         iter_energies = []
         iter_densities = []
         iter_energies_ve = []
@@ -685,11 +735,11 @@ class PPPCalculator:
             z_eff = z_eff_slater(electrons, charge=charge, population=1 - sigma_charge)
             z_effs.append(z_eff)
             ip = (
-                coefficients[0] * z_eff ** 2 + coefficients[1] * z_eff + coefficients[2]
+                coefficients[0] * z_eff**2 + coefficients[1] * z_eff + coefficients[2]
             )
             ips.append(ip)
-        z_effs = np.array(z_effs)
-        ips = np.array(ips)
+        z_effs: Array1DFloat = np.array(z_effs)
+        ips: Array1DFloat = np.array(ips)
 
         self.ips = ips
         self.z_effs = z_effs
@@ -730,7 +780,7 @@ class PPPCalculator:
             )
             z_effs.append(z_eff)
             ip = (
-                coefficients[0] * z_eff ** 2 + coefficients[1] * z_eff + coefficients[2]
+                coefficients[0] * z_eff**2 + coefficients[1] * z_eff + coefficients[2]
             )
             ips.append(ip)
 
@@ -766,7 +816,7 @@ class PPPCalculator:
 
     def ci(
         self,
-        n_states: int = None,
+        n_states: int | None = None,
         multiplicity: str = "singlet",
         calculate_f: bool = True,
         f_type: str = "length",
@@ -859,16 +909,16 @@ class PPPCalculator:
                 i, j, _ = excitation
                 transition_density = self.coefficients[i] * self.coefficients[j]
                 transition_densities_csf.append(transition_density)
-            transition_densities_csf = np.vstack(transition_densities_csf)
+            transition_densities_csf: Array2DFloat = np.vstack(transition_densities_csf)
 
             # Calculate oscillator strength, transition density and transition dipole
             # moment
             transition_dipole_moments = []
             transition_densities = []
-            for i in range(1, self.n_states):
+            for k in range(1, self.n_states):
                 transition_density = np.sum(
                     transition_densities_csf
-                    * self.ci_coefficients[i, 1:].reshape(-1, 1),
+                    * self.ci_coefficients[k, 1:].reshape(-1, 1),
                     axis=0,
                 )
                 transition_dip_moment = (
@@ -878,7 +928,7 @@ class PPPCalculator:
                     )
                     * ANGSTROM_TO_BOHR
                 )
-                excitation_energy = self.ci_energies[i] - self.ci_energies[0]
+                excitation_energy = self.ci_energies[k] - self.ci_energies[0]
                 oscillator_strength = (
                     2
                     / 3
@@ -888,8 +938,10 @@ class PPPCalculator:
                 oscillator_strengths.append(oscillator_strength)
                 transition_dipole_moments.append(transition_dip_moment)
                 transition_densities.append(transition_density)
-            transition_dipole_moments = np.array(transition_dipole_moments)
-            transition_densities = np.array(transition_densities)
+            transition_dipole_moments: Array1DFloat = np.array(
+                transition_dipole_moments
+            )
+            transition_densities: Array1DFloat = np.array(transition_densities)
 
             self.transition_dipole_moments = transition_dipole_moments
             self.transition_densities = transition_densities
@@ -916,18 +968,18 @@ class PPPCalculator:
                     * 1j
                 )
                 ps.append(p)
-            ps = np.array(ps)
+            ps: Array1DFloat = np.array(ps)
 
             # Calculate oscillator strength
-            for i in range(1, self.n_states):
+            for k in range(1, self.n_states):
                 p = np.sqrt(2) * np.sum(
-                    ps * self.ci_coefficients[i, 1].reshape(-1, 1),
+                    ps * self.ci_coefficients[k, 1].reshape(-1, 1),
                     axis=0,
                 )
                 excitation_energy = self.ci_energies[i] - self.ci_energies[0]
                 oscillator_strength = 2 / 3 * np.linalg.norm(p) ** 2 / excitation_energy
                 oscillator_strengths.append(oscillator_strength)
-        oscillator_strengths = np.array(oscillator_strengths)
+        oscillator_strengths: Array1DFloat = np.array(oscillator_strengths)
 
         self.oscillator_strengths = oscillator_strengths
 
@@ -943,7 +995,7 @@ class PPPCalculator:
         Returns:
             mo_integral: Electron repulsion integral in molecular orbital basis.
         """
-        mo_integral = np.sum(
+        mo_integral: float = np.sum(
             np.outer(
                 self.coefficients[j] * self.coefficients[i],
                 self.coefficients[k] * self.coefficients[l],
@@ -952,9 +1004,7 @@ class PPPCalculator:
         )
         return mo_integral
 
-    def get_huckel_matrix(
-        self, method: str = "spectroscopic"
-    ) -> Sequence[Sequence[float]]:
+    def get_huckel_matrix(self, method: str = "spectroscopic") -> Array2DFloat:
         """Generate Hückel matrix from PPP fock matrix.
 
         Following the procedure in 10.1007/BF00528229. Hückel matrix needs to be
@@ -965,8 +1015,11 @@ class PPPCalculator:
 
         Returns:
             huckel_matrix: Hückel matrix (a.u.)
+
+        Raises:
+            ValueError: If method is not supported.
         """
-        huckel_matrix = np.array(self.fock_matrix)
+        huckel_matrix: Array2DFloat = np.array(self.fock_matrix)
 
         # Use spectroscopic method
         if method == "spectroscopic":
@@ -993,13 +1046,15 @@ class PPPCalculator:
                     )
             corr_matrix = corr_matrix + corr_matrix.T - np.diag(corr_matrix.diagonal())
             huckel_matrix += corr_matrix
+        else:
+            raise ValueError("Available methods are: 'spectroscopic' and 'additive'.")
 
         # Set matrix elements between non-neighbors to zero
         huckel_matrix *= self.connectivity_matrix + np.eye(self.n_atoms)
 
         return huckel_matrix
 
-    def _get_c_matrix(self, state):
+    def _get_c_matrix(self, state: int) -> Array2DFloat:
         if state < 1:
             raise ValueError(f"Specified state is {state} but needs to be > 0.")
         elif state > self.n_states:
@@ -1013,7 +1068,17 @@ class PPPCalculator:
             c_matrix[i, a] = self.ci_coefficients[state][1:][idx]
         return c_matrix
 
-    def get_ntos(self, state):
+    def get_ntos(self, state: int) -> tuple[Array2DFloat, Array2DFloat, Array1DFloat]:
+        """Calculate natural transition orbitals for state.
+
+        Args:
+            state: State
+
+        Returns:
+            ntos_hole: Hole natural transition orbitals
+            ntos_particle: Particle natural transition orbitals
+            occupation numbers: Occupation numbers
+        """
         # Calculate coefficients matrix for state in question
         occ_orbs = self.coefficients[: self.n_occupied].T
         virt_orbs = self.coefficients[self.n_occupied :].T
@@ -1023,10 +1088,19 @@ class PPPCalculator:
         V = V_t.T
         ntos_hole = (occ_orbs @ U).T
         ntos_particle = (virt_orbs @ V).T
-        occupation_numbers = s ** 2
+        occupation_numbers = s**2
+
         return ntos_hole, ntos_particle, occupation_numbers
 
-    def get_ct_analysis(self, state):
+    def get_ct_analysis(self, state: int) -> dict[str, Any]:
+        """Perform charge transfer analysis for state.
+
+        Args:
+            state: State of interest
+
+        Returns:
+            results: Dictionary of results
+        """
         c_matrix = self._get_c_matrix(state)
         occ_orbs = self.coefficients[: self.n_occupied].T
         virt_orbs = self.coefficients[self.n_occupied :].T
@@ -1119,7 +1193,7 @@ def homo_lumo_overlap(ppp: PPPCalculator) -> float:
     Returns:
         overlap: Orbital overlap
     """
-    overlap = np.dot(
+    overlap: float = np.dot(
         np.abs(ppp.coefficients[ppp.homo_idx]), np.abs(ppp.coefficients[ppp.lumo_idx])
     )
     return overlap
@@ -1189,6 +1263,6 @@ def calculate_dsp(ppp: PPPCalculator) -> float:
     s_1 = np.sum(s_1_all)
     t_1 = np.sum(t_1_all)
     t_2 = np.sum(t_2_all)
-    dsp = -(s_1 - t_1 - t_2)
+    dsp: float = -(s_1 - t_1 - t_2)
 
     return dsp
