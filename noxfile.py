@@ -21,7 +21,7 @@ def tests(session: Session) -> None:
 
 
 # Linting
-@nox.session(python="3.8")
+@nox.session(python="3.9")
 def lint(session: Session) -> None:
     """Lint code."""
     args = session.posargs or locations
@@ -38,7 +38,7 @@ def lint(session: Session) -> None:
 
 
 # Code formatting
-@nox.session(python="3.8")
+@nox.session(python="3.9")
 def black(session: Session) -> None:
     """Format code."""
     args = session.posargs or locations
@@ -47,7 +47,7 @@ def black(session: Session) -> None:
 
 
 # Static typing
-@nox.session(python="3.8")
+@nox.session(python="3.9")
 def mypy(session: Session) -> None:
     """Run the static type checker."""
     args = session.posargs or locations
