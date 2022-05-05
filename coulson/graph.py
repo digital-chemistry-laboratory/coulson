@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Iterable
+from collections.abc import Iterable, Sequence
+import itertools
 
 import networkx as nx
 import numpy as np
+from scipy.sparse import csr_matrix
+from scipy.sparse.csgraph import connected_components
 
 from coulson.typing import (
     Array1DFloat,
@@ -251,3 +254,110 @@ def poly_div_deriv(  # noqa: C901
         r[dq] = q[i]
         ans -= poly_div_deriv(power - 1, dp, p, dq + 1, r)
     return ans
+
+
+def cycles_from_basis(
+    cycle_basis: Iterable[Iterable[tuple[int, ...]]],
+) -> tuple[tuple[tuple[int, ...], ...], ...]:
+    """Calculates simple cycles from given cycle basis.
+
+    Uses algorithm from J. Chem. Inf. Comput. Sci. 1975, 15 (3), 140-147, 10.1021/ci60003a003.
+
+    Args:
+        cycle_basis: Cycles in basis
+
+    Returns:
+        simple_cycles: Cycles derived from basis
+    """
+    cycle_basis = [
+        frozenset(frozenset(pair) for pair in cycle) for cycle in cycle_basis
+    ]
+    simple_cycles: set[frozenset[frozenset[int]]] = set()
+    all_cycles: set[frozenset[frozenset[int]]] = set()
+
+    for base_cycle in cycle_basis:
+        new_simple_cycles: set[frozenset[frozenset[int]]] = set()
+        new_all_cycles: set[frozenset[frozenset[int]]] = set()
+
+        # Create combinations with previously created cycles
+        for old_cycle in all_cycles:
+            new_cycle = old_cycle.symmetric_difference(base_cycle)
+            new_all_cycles.add(new_cycle)
+
+            # If there is no intersection, cycle is disconnected and not simple
+            if len(old_cycle.intersection(base_cycle)) == 0:
+                continue
+
+            # Prune out cycles
+            rm_simple_cycles = set()
+            for check_cycle in new_simple_cycles:
+                if new_cycle < check_cycle:  # Proper subset
+                    rm_simple_cycles.add(check_cycle)
+                if check_cycle < new_cycle:  # Proper subset
+                    rm_simple_cycles.add(new_cycle)
+                    break
+            new_simple_cycles.add(new_cycle)
+            new_simple_cycles.difference_update(rm_simple_cycles)
+        simple_cycles.update(new_simple_cycles)
+        all_cycles.update(new_all_cycles)
+        all_cycles.add(base_cycle)
+        simple_cycles.add(base_cycle)
+    simple_cycles = tuple(
+        tuple(tuple(pair) for pair in cycle) for cycle in simple_cycles
+    )
+
+    return simple_cycles
+
+
+def rings_from_connectivity(
+    connectivity_matrix: ArrayLike2D,
+) -> tuple[tuple[int, ...], ...]:
+    """Return rings in graph sorted by length.
+
+    Args:
+        connectivity_matrix: Connectivity matrix
+
+    Returns:
+        rings: Rings as list of list
+    """
+    # Create graph
+    G = nx.convert_matrix.from_numpy_array(connectivity_matrix)
+
+    # Loop over rings and keep unique ones
+    already_seen = set()
+    rings = []
+    cycle: list[int]
+    for cycle in list(nx.simple_cycles(G.to_directed())):
+        if len(cycle) > 2:
+            if frozenset(cycle) not in already_seen:
+                rings.append(cycle)
+                already_seen.add(frozenset(cycle))
+    rings.sort(key=len)
+    rings = tuple(tuple(ring) for ring in rings)
+
+    return rings
+
+
+def is_disconnected(edges: Sequence[tuple[int, int]]) -> bool:
+    """Check whether edges form disconnected components.
+
+    Args:
+        edges: Edges of graph
+
+    Returns:
+        disconnected: Whether components are disconnected.
+    """
+    # Create connectivity matrix from edges
+    size = max(itertools.chain.from_iterable(edges)) + 1
+    cm = np.zeros((size, size))
+    for i, j in edges:
+        cm[i, j] = cm[j, i] = 1
+    mask = cm.any(axis=0)
+    cm = cm[:, mask][mask, :]
+
+    # Calculate number of connected components
+    n: int
+    n, _ = connected_components(csgraph=csr_matrix(cm), directed=False)
+    disconnected = n > 1
+
+    return disconnected

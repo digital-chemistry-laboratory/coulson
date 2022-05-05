@@ -7,6 +7,7 @@ from typing import Sequence
 
 import numpy as np
 
+from coulson.graph import rings_from_connectivity
 from coulson.typing import (
     Array1DFloat,
     Array1DInt,
@@ -14,7 +15,6 @@ from coulson.typing import (
     Array2DInt,
     ArrayLike2D,
 )
-from coulson.utils import rings_from_connectivity
 
 
 class HuckelCalculator:

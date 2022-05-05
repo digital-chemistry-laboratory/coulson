@@ -6,10 +6,9 @@ from dataclasses import dataclass
 from importlib import import_module
 from typing import Callable, NoReturn, Sequence
 
-import networkx as nx
 import numpy as np
 
-from coulson.typing import Array1DInt, ArrayLike2D
+from coulson.typing import Array1DInt
 
 
 def get_multiplicity(n_electrons: int) -> int:
@@ -52,33 +51,6 @@ def occupations_from_multiplicity(
     n_empty = n_orbitals - n_doubly - n_singly
     occupations: Array1DInt = np.array([2] * n_doubly + [1] * n_singly + [0] * n_empty)
     return occupations
-
-
-def rings_from_connectivity(
-    connectivity_matrix: ArrayLike2D,
-) -> list[list[int]]:
-    """Return rings in graph sorted by length.
-
-    Args:
-        connectivity_matrix: Connectivity matrix
-
-    Returns:
-        rings: Rings as list of list
-    """
-    # Create graph
-    G = nx.convert_matrix.from_numpy_array(connectivity_matrix)
-
-    # Loop over rings and keep unique ones
-    already_seen = set()
-    rings = []
-    for i in list(nx.simple_cycles(G.to_directed())):
-        if len(i) > 2:
-            if frozenset(i) not in already_seen:
-                rings.append(i)
-                already_seen.add(frozenset(i))
-    rings.sort(key=len)
-
-    return rings
 
 
 @dataclass
