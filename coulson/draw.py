@@ -40,7 +40,6 @@ def draw_orbital_energies(  # noqa: C901
     Raises:
         ValueError: When maximum degeneracy exceeds 2.
     """
-
     # Set up plot
     fig, ax = plt.subplots(figsize=fig_size)
     ax.set_xticklabels([])
@@ -165,7 +164,6 @@ def draw_mol(  # noqa: C901
     Raises:
         ValueError: When image format not supported.
     """
-
     # Set mutable default arguments
     if highlighted_atoms is None:
         highlighted_atoms = []

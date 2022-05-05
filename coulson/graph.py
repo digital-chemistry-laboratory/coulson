@@ -7,7 +7,13 @@ from typing import Iterable
 import networkx as nx
 import numpy as np
 
-from coulson.typing import Array1DInt, Array2DFloat, ArrayLike2D
+from coulson.typing import (
+    Array1DFloat,
+    Array1DInt,
+    Array2DFloat,
+    ArrayLike1D,
+    ArrayLike2D,
+)
 from coulson.utils import get_multiplicity, occupations_from_multiplicity
 
 
@@ -187,3 +193,61 @@ def matching_polynomial(g: nx.Graph) -> np.polynomial.Polynomial:
             mp += factor * poly
 
     return mp
+
+
+def poly_div_deriv(  # noqa: C901
+    power: int, dp: int, p: ArrayLike1D, dq: int, q: ArrayLike1D
+) -> float:
+    """Evaluate derivative of polynomial division.
+
+    Following the procedure of Chemistry 2021, 3 (4), 1138-1156, 10.3390/chemistry3040083.
+
+    Args:
+        power: Number of times to differentiate
+        dp: Degree of polynomial p
+        p: Polynomial coefficients of p
+        dq: Degree of polynomial q
+        q: Polynomial coefficients of q
+
+    Returns:
+        ans: Derivative
+    """
+    p: Array1DFloat = np.asarray(p)
+    q: Array1DFloat = np.asarray(q)
+    r: Array1DFloat = np.zeros_like(p)
+    if power == 0:
+        if dp < dq:
+            limit = dq
+        else:
+            limit = dp
+        ans = 1.0
+        for i in range(limit):
+            if i < dp:
+                top = p[i]
+            else:
+                top = 1
+            if i < dq:
+                bottom = q[i]
+            else:
+                bottom = 1
+            ans *= top / bottom
+        return ans
+    ans = 0.0
+    if dp > 0:
+        if dp == 1:
+            r[0] = 1
+            ans += poly_div_deriv(power - 1, dp - 1, r, dq, q)
+        else:
+            for i in range(dp):
+                pos = 0
+                for j in range(dp):
+                    if i != j:
+                        r[pos] = p[j]
+                        pos += 1
+                ans += poly_div_deriv(power - 1, dp - 1, r, dq, q)
+    for i in range(dq):
+        r[i] = q[i]
+    for i in range(dq):
+        r[dq] = q[i]
+        ans -= poly_div_deriv(power - 1, dp, p, dq + 1, r)
+    return ans
