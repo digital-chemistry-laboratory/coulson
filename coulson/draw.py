@@ -40,7 +40,6 @@ def draw_orbital_energies(  # noqa: C901
     Raises:
         ValueError: When maximum degeneracy exceeds 2.
     """
-    Chem.Draw.rdDepictor.SetPreferCoordGen(True)
 
     # Set up plot
     fig, ax = plt.subplots(figsize=fig_size)
@@ -166,7 +165,6 @@ def draw_mol(  # noqa: C901
     Raises:
         ValueError: When image format not supported.
     """
-    Chem.Draw.rdDepictor.SetPreferCoordGen(True)
 
     # Set mutable default arguments
     if highlighted_atoms is None:
