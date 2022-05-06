@@ -257,7 +257,7 @@ def poly_div_deriv(  # noqa: C901
 
 
 def cycles_from_basis(
-    cycle_basis: Iterable[Iterable[tuple[int, ...]]],
+    cycle_basis: Iterable[Iterable[int]],
 ) -> tuple[tuple[tuple[int, ...], ...], ...]:
     """Calculates simple cycles from given cycle basis.
 
@@ -270,7 +270,8 @@ def cycles_from_basis(
         simple_cycles: Cycles derived from basis
     """
     cycle_basis = [
-        frozenset(frozenset(pair) for pair in cycle) for cycle in cycle_basis
+        frozenset(frozenset(pair) for pair in nx.utils.pairwise(cycle, cyclic=True))
+        for cycle in cycle_basis
     ]
     simple_cycles: set[frozenset[frozenset[int]]] = set()
     all_cycles: set[frozenset[frozenset[int]]] = set()

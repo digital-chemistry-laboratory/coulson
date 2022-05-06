@@ -31,6 +31,7 @@ class HuckelCalculator:
         bo_matrix: Bond order matrix
         charges: Atomic charges
         coefficients: Coefficients
+        degeneracies: Degeneracies
         energies: Energies
         multiplicity: Multiplicity
         electrons: Number of electrons contributed by each atom
@@ -46,6 +47,7 @@ class HuckelCalculator:
     bo_matrix: Array2DFloat
     charges: Array1DFloat
     coefficients: Array2DFloat
+    degeneracies: Array1DInt
     energies: Array1DFloat
     multiplicity: int
     electrons: Iterable[int]
@@ -201,10 +203,15 @@ class HuckelCalculator:
         # Loop over unique rounded orbital energies and degeneracies and fill with
         # electrons
         energies_rounded = self.energies.round(self.n_dec_degen)
-        unique_energies: Array1DFloat
+        unique_energies_rounded: Array1DFloat
         degeneracies: Array1DInt
-        unique_energies, degeneracies = np.unique(energies_rounded, return_counts=True)
-        for energy, degeneracy in zip(np.flip(unique_energies), np.flip(degeneracies)):
+        unique_energies_rounded, indices, degeneracies = np.unique(
+            energies_rounded, return_index=True, return_counts=True
+        )
+        unique_energies = np.flip(self.energies[indices])
+        unique_energies_rounded = np.flip(unique_energies_rounded)
+        degeneracies = np.flip(degeneracies)
+        for energy, degeneracy in zip(unique_energies_rounded, degeneracies):
             if len(all_electrons) == 0:
                 break
 
@@ -229,10 +236,20 @@ class HuckelCalculator:
             np.sum(occupations[:n_occupied][occupations[:n_occupied] != 2])
         )
 
+        # Set shell occupations
+        shell_occupations = np.zeros_like(unique_energies)
+        i = 0
+        for j, degeneracy in enumerate(degeneracies):
+            shell_occupations[j] = sum(occupations[i : i + degeneracy]) / degeneracy
+            i += degeneracy
+
         self.occupations = occupations
+        self.shell_occupations_avg = shell_occupations
         self.spin_occupations = spin_occupations
         self.n_occupied = n_occupied
         self.n_unpaired = n_unpaired
+        self.unique_energies = unique_energies
+        self.degeneracies = degeneracies
 
     def _calculate_bond_orders(self) -> None:
         # Set up density matrices

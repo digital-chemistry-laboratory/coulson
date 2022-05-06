@@ -29,6 +29,7 @@ from coulson.utils import Import, requires_dependency
 if typing.TYPE_CHECKING:  # pragma: no cover
     import pyscf  # pragma: no cover
     from rdkit import Chem  # pragma: no cover
+    from rdkit.Chem import AllChem, rdCoordGen
 
     from coulson.ppp import PPPCalculator  # pragma: no cover
 
@@ -416,6 +417,43 @@ def process_rdkit_mol(
     )
 
     return input_data, mask
+
+
+@requires_dependency(
+    [
+        Import(module="rdkit", item="Chem"),
+        Import(module="rdkit.Chem", item="AllChem"),
+        Import(module="rdkit.Chem", item="rdCoordGen"),
+    ],
+    globals(),
+)
+def coords_2D_from_rdkit(
+    mol: Chem.Mol, bond_length: float = 1.4, coordgen: bool = True
+) -> Array2DFloat:
+    """Returns 2D coordinates computed with RDKit.
+
+    Args:
+        mol: RDKit Mol object
+        bond_length: Bond length
+        coordgen: Whether to use CoordGen or RDKit's default algorithm.
+
+    Returns:
+        coordinates: 2D coordinates (Å)
+    """
+    if coordgen is True:
+        ps = rdCoordGen.CoordGenParams()
+        ps.minimizerPrecision = ps.sketcherBestPrecision
+        rdCoordGen.AddCoords(mol, ps)
+        tm = np.zeros((4, 4))
+        for i in range(3):
+            tm[i, i] = bond_length
+        tm[3, 3] = 1.0
+        AllChem.TransformMol(mol, tm)
+    else:
+        AllChem.Compute2DCoords(mol, bondLength=bond_length)
+    coordinates = mol.GetConformer().GetPositions()
+
+    return coordinates
 
 
 def generate_input_data(
