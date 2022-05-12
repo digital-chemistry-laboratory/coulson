@@ -2,18 +2,27 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 import typing
 
+import networkx as nx
 import numpy as np
 
-from coulson.typing import Array1DFloat, Array1DInt, ArrayLike1D
+from coulson.graph import Circuit
+from coulson.typing import (
+    Array1DFloat,
+    Array1DInt,
+    Array2DFloat,
+    ArrayLike1D,
+    ArrayLike2D,
+)
 from coulson.utils import Import, requires_dependency
 
 if typing.TYPE_CHECKING:  # pragma: no cover
     import matplotlib.pyplot as plt  # pragma: no cover
     from rdkit import Chem  # pragma: no cover
     from rdkit.Chem.Draw import SimilarityMaps  # pragma: no cover
+    from rdkit.Geometry import Point2D, Point3D
 
 
 @requires_dependency(
@@ -126,6 +135,8 @@ def draw_orbital_energies(  # noqa: C901
     [
         Import(module="rdkit", item="Chem"),
         Import(module="rdkit.Chem.Draw", item="SimilarityMaps"),
+        Import(module="rdkit.Geometry", item="Point2D"),
+        Import(module="rdkit.Geometry", item="Point3D"),
     ],
     globals(),
 )
@@ -136,6 +147,12 @@ def draw_mol(  # noqa: C901
     atom_labels: Iterable[float] | None = None,
     bond_numbers: bool = False,
     bond_labels: Iterable[float] | None = None,
+    rings: Iterable[Iterable[int]] | None = None,
+    ring_labels: Iterable[float] | None = None,
+    circle_values: Iterable[float] | None = None,
+    circle_radius: float = 0.3,
+    circle_cmap: str = "RdBu",
+    circle_cmax: float | None = 0.25,
     highlighted_atoms: Iterable[int] | None = None,
     highlighted_bonds: Iterable[int] | None = None,
     size: tuple[int, int] = (400, 400),
@@ -151,6 +168,12 @@ def draw_mol(  # noqa: C901
         atom_labels: Labels to print for atoms
         bond_numbers: Whether to print bond numbers
         bond_labels: Labels to print for bonds
+        rings: Ring indices
+        ring_labels: Ring labels
+        circle_values: Value to plot as colored circles in rings
+        circle_radius: Circle radius
+        circle_cmap: Color map for circles
+        circle_cmax: Max value for color mapping for circles
         highlighted_atoms: Indices for atoms to highlight
         highlighted_bonds: Indices for bonds to highlight
         size: Size of RDKit draw object
@@ -201,13 +224,152 @@ def draw_mol(  # noqa: C901
     if bond_labels is not None:
         for bond, label in zip(mol.GetBonds(), bond_labels):
             bond.SetProp("bondNote", f"{label:.{n_decimals}f}")
+    if ring_labels is not None and rings is not None:
+        coordinates = mol.GetConformer().GetPositions()
+        rw_mol = Chem.RWMol(mol)
+        for ring, label in zip(rings, ring_labels):
+            idx = rw_mol.AddAtom(Chem.Atom(0))
+            rw_mol.GetAtomWithIdx(idx).SetProp("atomNote", f"{label:.{n_decimals}f}")
+            coords = np.mean(coordinates[list(ring)], axis=0)
+            point = Point3D(*coords)
+            conformer = rw_mol.GetConformer()
+            conformer.SetAtomPosition(idx, point)
+        mol = rw_mol.GetMol()
 
-    # Finalize drawing
+    # Draw mol
     d2d.DrawMolecule(
         mol, highlightAtoms=highlighted_atoms, highlightBonds=highlighted_bonds
     )
 
+    # Draw circles
+    if circle_values is not None and rings is not None:
+        coordinates = mol.GetConformer().GetPositions()
+        if circle_cmax is None:
+            max_val = max(circle_values)
+        else:
+            max_val = circle_cmax
+        for ring, value in zip(rings, circle_values):
+            center = np.mean(coordinates[list(ring)], axis=0)
+            p1 = Point2D(center[0] - circle_radius, center[1] - circle_radius)
+            p2 = Point2D(center[0] + circle_radius, center[1] + circle_radius)
+            cmap = plt.cm.get_cmap(circle_cmap)
+            rgb = cmap(value / abs(max_val) / 2 + 0.5)[:3]
+            d2d.SetColour(rgb)
+            d2d.DrawEllipse(p1, p2)
+
+    # Finalize drawing
     d2d.FinishDrawing()
     drawing_text: str | bytes = d2d.GetDrawingText()
 
     return drawing_text
+
+
+@requires_dependency(
+    [
+        Import(module="matplotlib", item="pyplot", alias="plt"),
+    ],
+    globals(),
+)
+def draw_bond_currents(
+    bond_currents: Mapping[tuple[int, int], float],
+    coordinates: ArrayLike2D,
+    figsize: tuple[int, int] = (12, 12),
+    arrow_scale: float = 0.005,
+    marker_size: float = 100,
+) -> tuple[plt.Figure, plt.Axes]:
+    """Draw bond currents.
+
+    Args:
+        bond_currents: Bond currents
+        coordinates: Coordinates (Å)
+        figsize: Figure size
+        arrow_scale: Arrow scale factor
+        marker_size: Marker size
+
+    Returns:
+        fig, ax: Matplotlib F
+    """
+    coordinates: Array2DFloat = np.asarray(coordinates)
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.set_aspect("equal", "box")
+    ax.axis("off")
+
+    for (i, j), I in bond_currents.items():
+        if I < 0:
+            i, j = j, i
+        x, y = coordinates[[i, j], 0], coordinates[[i, j], 1]
+        dx, dy = x[1] - x[0], y[1] - y[0]
+        width = np.sqrt(arrow_scale * abs(I))
+        ax.plot(x, y, linewidth=width * 100, color="C1")
+        ax.arrow(
+            x[0],
+            y[0],
+            dx * 0.4,
+            dy * 0.4,
+            linewidth=width,
+            head_width=width * 4,
+            color="C1",
+        )
+        ax.annotate(f"{abs(I):.3f}", (x[0] + dx * 0.4 + 0.05, y[0] + dy * 0.4 + 0.05))
+    ax.scatter(coordinates[:, 0], coordinates[:, 1], color="C0", s=marker_size)
+    plt.close()
+
+    return fig, ax
+
+
+@requires_dependency(
+    [
+        Import(module="matplotlib", item="pyplot", alias="plt"),
+    ],
+    globals(),
+)
+def draw_circuit_currents(
+    circuits: Iterable[Circuit],
+    coordinates: ArrayLike2D,
+    figsize: tuple[int, int] = (12, 12),
+    arrow_scale: float = 0.005,
+    marker_size: float = 100,
+) -> list[tuple[plt.Figure, plt.Axes]]:
+    """Draws circuit currents.
+
+    Args:
+        circuits: Circuits
+        coordinates: Coordinates (Å)
+        figsize: Figure size
+        arrow_scale: Arrow scale factor
+        marker_size: Marker size
+
+    Returns:
+        plots: Plots
+    """
+    coordinates: Array2DFloat = np.asarray(coordinates)
+
+    plots = []
+    for circuit in circuits:
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.set_aspect("equal", "box")
+        ax.axis("off")
+        indices = list(circuit.indices)
+        I = sum(circuit.I)
+        if (I > 0 and circuit.ccw is False) or (I < 0 and circuit.ccw is True):
+            indices = list(reversed(indices))
+        pairs = nx.utils.pairwise(indices, cyclic=True)
+        for i, j in pairs:
+            x, y = coordinates[[i, j], 0], coordinates[[i, j], 1]
+            dx, dy = x[1] - x[0], y[1] - y[0]
+            width = np.sqrt(arrow_scale * abs(I))
+            ax.plot(x, y, linewidth=width * 100, color="C1")
+            ax.arrow(
+                x[0],
+                y[0],
+                dx * 0.4,
+                dy * 0.4,
+                linewidth=width,
+                head_width=width * 6,
+                color="C1",
+            )
+            # ax.quiver(x[0] + dx / 2, y[0] + dy / 2, dx * width, dy * width, color="C1")
+        ax.scatter(coordinates[:, 0], coordinates[:, 1], color="C0", s=marker_size)
+        plt.close()
+        plots.append((fig, ax))
+    return plots

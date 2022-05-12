@@ -1,0 +1,4 @@
+name,smiles,charge
+Naphthalene,C12=CC=CC=C1C=CC=C2,0
+Azulene,C1=CC=C2C=CC=CC=C12,0
+Bicyclo[6.2.0]decapentaene ,C1=CC=CC2=C(C=C1)C=C2,0

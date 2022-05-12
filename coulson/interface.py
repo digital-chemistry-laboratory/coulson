@@ -456,6 +456,41 @@ def coords_2D_from_rdkit(
     return coordinates
 
 
+@requires_dependency(
+    [
+        Import(module="rdkit", item="Chem"),
+        Import(module="rdkit.Chem", item="AllChem"),
+    ],
+    globals(),
+)
+def scale_rdkit_mol(mol: Chem.Mol, bond_length: float = 1.4, n_dec: int = 3) -> None:
+    """Scales RDKit mol object to desired bond length.
+
+    Args:
+        mol: RDKit Mol object
+        bond_length: Desired bond length
+        n_dec: Number of decimals for equal bond length
+
+    Raises:
+        ValueError: When bond lengths are not the same
+    """
+    # Check if there is only one bond length
+    dm = Chem.Get3DDistanceMatrix(mol)
+    distances = [
+        dm[bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()] for bond in mol.GetBonds()
+    ]
+    unique_dists: Array1DFloat = np.unique(np.round(distances, n_dec))
+    if len(unique_dists) != 1:
+        raise ValueError("More than one unique distance. Cannot scale distances.")
+
+    # Scale bond lengths to desired value
+    tm = np.zeros((4, 4))
+    scale_factor = bond_length / unique_dists
+    np.fill_diagonal(tm, scale_factor)
+    tm[3, 3] = 1.0
+    AllChem.TransformMol(mol, tm)
+
+
 def generate_input_data(
     symbols: Sequence[str],
     degrees: Iterable[int],

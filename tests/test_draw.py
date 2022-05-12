@@ -74,7 +74,7 @@ def test_draw_mol_svg(huckel_input):
     huckel_matrix, n_electrons = huckel_input
     hc = HuckelCalculator(huckel_matrix, n_electrons)
     bond_orders = [
-        hc.bond_order(bond.GetBeginAtomIdx() + 1, bond.GetEndAtomIdx() + 1)
+        hc.bond_order(bond.GetBeginAtomIdx(), bond.GetEndAtomIdx())
         for bond in mol.GetBonds()
     ]
     drawing_text = draw_mol(

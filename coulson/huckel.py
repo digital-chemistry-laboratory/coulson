@@ -7,7 +7,7 @@ from typing import Sequence
 
 import numpy as np
 
-from coulson.graph import rings_from_connectivity
+from coulson.graph import cycles_from_connectivity
 from coulson.typing import (
     Array1DFloat,
     Array1DInt,
@@ -109,13 +109,13 @@ class HuckelCalculator:
         """Returns bond order between two atoms.
 
         Args:
-            i: Index of atom 1 (1-indexed)
-            j: Index of atom 2 (1-indexed)
+            i: Index of atom 1
+            j: Index of atom 2
 
         Returns:
             bo: Bond order
         """
-        bo: float = self.bo_matrix[i - 1, j - 1]
+        bo: float = self.bo_matrix[i, j]
 
         return bo
 
@@ -129,7 +129,7 @@ class HuckelCalculator:
         """Returns the I_ring or MCI indices.
 
         Args:
-            indices: Indices of ring sequential order as bonded (1-indexed)
+            indices: Indices of ring sequential order as bonded
             normalize: Whether to normalize with respect to ring size
             permute: Whether to do all permutations of ring indices to get MCI
             norm_method: Method to use for normalization: 'mandado' or 'solà'
@@ -155,7 +155,7 @@ class HuckelCalculator:
         for indices in i_ring_indices:
             i_ring = 1
             for (i, j) in zip(indices, indices[1:] + indices[:1]):
-                i_ring *= self.bo_matrix[i - 1, j - 1]
+                i_ring *= self.bo_matrix[i, j]
             i_rings.append(i_ring)
         index = sum(i_rings)
 
@@ -178,7 +178,7 @@ class HuckelCalculator:
         Returns:
             rings: Rings
         """
-        rings = rings_from_connectivity(self.connectivity_matrix)
+        rings = cycles_from_connectivity(self.connectivity_matrix)
         rings = [[i + 1 for i in ring] for ring in rings]
         return rings
 

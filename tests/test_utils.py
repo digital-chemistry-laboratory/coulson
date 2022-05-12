@@ -4,8 +4,9 @@ import sys
 import numpy as np
 import pytest
 
+from coulson.graph import cycles_from_connectivity
 from coulson.typing import Array2DInt
-from coulson.utils import Import, requires_dependency, rings_from_connectivity
+from coulson.utils import Import, requires_dependency
 
 
 def test_requires_depedency_module():
@@ -69,7 +70,7 @@ def test_requires_depedency_item_fail():
         f()
 
 
-def test_rings_from_connectivity():
+def test_cycles_from_connectivity():
     """Test generation of rings from connectivity matrix."""
     connectivity_matrix: Array2DInt = np.array(
         [
@@ -85,7 +86,7 @@ def test_rings_from_connectivity():
             [1, 0, 0, 0, 1, 0, 0, 0, 1, 0],
         ]
     )
-    ref_rings = [[0, 9, 4, 3, 2, 1], [4, 9, 8, 7, 6, 5], [0, 9, 8, 7, 6, 5, 4, 3, 2, 1]]
-    rings = rings_from_connectivity(connectivity_matrix)
+    ref_rings = ((0, 9, 4, 3, 2, 1), (4, 9, 8, 7, 6, 5), (0, 9, 8, 7, 6, 5, 4, 3, 2, 1))
+    rings = cycles_from_connectivity(connectivity_matrix)
 
     assert ref_rings == rings

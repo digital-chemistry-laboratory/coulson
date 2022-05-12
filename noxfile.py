@@ -15,7 +15,7 @@ def tests(session: Session) -> None:
     """Run tests."""
     args = session.posargs or ["--cov", "--import-mode=importlib", "-s"]
     session.conda_install("pytest", "pytest-cov")
-    session.conda_install("networkx", "numpy", "rdkit", "scipy")
+    session.conda_install("networkx", "numpy", "rdkit", "scipy", "shapely")
     session.install(".", "--no-deps")
     session.run("pytest", *args)
 
@@ -52,5 +52,5 @@ def mypy(session: Session) -> None:
     """Run the static type checker."""
     args = session.posargs or locations
     session.conda_install("mypy")
-    session.conda_install("networkx", "numpy", "rdkit", "scipy")
+    session.conda_install("networkx", "numpy", "rdkit", "scipy", "shapely")
     session.run("mypy", *args)

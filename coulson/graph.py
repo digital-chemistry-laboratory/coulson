@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass
 import itertools
+import math
+import typing
 
 import networkx as nx
 import numpy as np
@@ -14,55 +18,68 @@ from coulson.typing import (
     Array1DFloat,
     Array1DInt,
     Array2DFloat,
+    Array2DInt,
     ArrayLike1D,
     ArrayLike2D,
 )
-from coulson.utils import get_multiplicity, occupations_from_multiplicity
+from coulson.utils import Import, requires_dependency
+
+if typing.TYPE_CHECKING:  # pragma: no cover
+    from shapely import Polygon  # pragma: no cover
+
+
+@dataclass
+class Circuit:
+    """Class for storing circuit data."""
+
+    indices: tuple[int, ...]
+    A: Array1DFloat
+    I: Array1DFloat
+    X: Array1DFloat
+    area: float
+    ccw: bool
 
 
 def calculate_bre(
     huckel_matrix: ArrayLike2D,
-    n_electrons: int,
-    indices: Iterable[tuple[int, int]],
-    multiplicity: int | None = None,
+    occupations: ArrayLike1D,
+    indices: Iterable[Iterable[int]],
 ) -> float:
     """Calculate bond resonance energy according to recipe of Aihara.
 
     Args:
         huckel_matrix: Hückel matrix
-        n_electrons: Number of electrons
-        indices: Tuples of atom indices (1-indexed)
-        multiplicity: Multiplicity
+        occupations: Orbital occupations
+        indices: Tuples of atom indices
 
     Returns:
         bre: Bond resonance energy
+
+    Raises:
+        ValueError: If matrix elements are zero
     """
     huckel_matrix: Array2DFloat = np.array(huckel_matrix)
-    n_atoms = huckel_matrix.shape[0]
+    occupations: Array1DFloat = np.asarray(occupations)
 
-    # Set multiplicity
-    if multiplicity is None:
-        multiplicity = get_multiplicity(n_electrons)
-
-    # Set occupations
-    occupations = occupations_from_multiplicity(n_electrons, n_atoms, multiplicity)
+    # Check if connected or not
+    for i, j in indices:
+        if huckel_matrix[i, j] == 0 or huckel_matrix[j, i] == 0:
+            raise ValueError(f"Matrix element {i}, {j} is zero.")
 
     # Calculate reference roots
-    ref_roots, _ = np.linalg.eigh(huckel_matrix)
+    ref_roots = np.linalg.eigvalsh(huckel_matrix)[::-1]
     huckel_matrix = huckel_matrix.astype(complex)
     for i, j in indices:
-        huckel_matrix[i - 1, j - 1] *= 1j
-        huckel_matrix[j - 1, i - 1] *= -1j
-    bre_roots, _ = np.linalg.eigh(huckel_matrix)
-    bre = sum((bre_roots - ref_roots) * occupations)
+        huckel_matrix[i, j] *= 1j
+        huckel_matrix[j, i] *= -1j
+    bre_roots = np.linalg.eigvalsh(huckel_matrix)[::-1]
+    bre = sum((ref_roots - bre_roots) * occupations)
 
     return bre
 
 
 def calculate_tre(
-    huckel_matrix: ArrayLike2D,
-    n_electrons: int,
-    multiplicity: int | None = None,
+    huckel_matrix: ArrayLike2D, occupations: ArrayLike1D
 ) -> tuple[float, float]:
     """Calculate topological resonance energy according to the recipe of Aihara.
 
@@ -70,34 +87,25 @@ def calculate_tre(
 
     Args:
         huckel_matrix: Hückel matrix
-        n_electrons: Number of electrons in the molecule
-        multiplicity: Multiplicity
+        occupations: Orbital occupations
 
     Returns:
         tre: Topological resonance energy
         p_tre: Percentage topological resonance energy
     """
     huckel_matrix: Array2DFloat = np.asarray(huckel_matrix)
-    n_atoms = huckel_matrix.shape[0]
-
-    # Set multiplicity
-    if multiplicity is None:
-        multiplicity = get_multiplicity(n_electrons)
-
-    # Set occupations
-    occupations = occupations_from_multiplicity(n_electrons, n_atoms, multiplicity)
+    occupations: Array1DFloat = np.asarray(occupations)
 
     # Set up graph and set weights
     G = nx.Graph(huckel_matrix)
 
     # Calculate charateristic polynomial
-    cp = np.poly(huckel_matrix)
-    cp_roots = np.sort(np.roots(cp))[::-1]
+    cp_roots = np.linalg.eigvalsh(huckel_matrix)[::-1]
     cp_energy = np.sum(cp_roots * occupations)
 
     # Calculate matching polynomial
     mp = matching_polynomial(G)
-    mp_roots = mp.roots()[::-1]  # type: ignore
+    mp_roots = mp.roots().real[::-1]  # type: ignore
     mp_energy = np.sum(mp_roots * occupations)
 
     # Calculate topological resonance energy
@@ -256,9 +264,9 @@ def poly_div_deriv(  # noqa: C901
     return ans
 
 
-def cycles_from_basis(
+def cycle_edges_from_basis(
     cycle_basis: Iterable[Iterable[int]],
-) -> tuple[tuple[tuple[int, ...], ...], ...]:
+) -> tuple[tuple[tuple[int, int], ...], ...]:
     """Calculates simple cycles from given cycle basis.
 
     Uses algorithm from J. Chem. Inf. Comput. Sci. 1975, 15 (3), 140-147, 10.1021/ci60003a003.
@@ -306,40 +314,161 @@ def cycles_from_basis(
     simple_cycles = tuple(
         tuple(tuple(pair) for pair in cycle) for cycle in simple_cycles
     )
+    simple_cycles = typing.cast(tuple[tuple[tuple[int, int], ...], ...], simple_cycles)
 
     return simple_cycles
 
 
-def rings_from_connectivity(
+@requires_dependency(
+    [
+        Import(module="shapely.geometry", item="Polygon"),
+    ],
+    globals(),
+)
+def calculate_circuits(
+    cycles: Iterable[Iterable[int]],
+    huckel_matrix: ArrayLike2D,
+    shell_energies: Iterable[float],
+    shell_occupations: Iterable[float],
+    degeneracies: Iterable[int],
+    coordinates: ArrayLike2D,
+    multiplicity: float = 1,
+    ref_area: float = 5.092229374252501,
+) -> list[Circuit]:
+    """Calculate circuits.
+
+    Args:
+        cycles: Cycles
+        huckel_matrix: Hückel matrix
+        shell_energies: Energies of each shell
+        shell_occupations: Occupations of each shell
+        degeneracies: Degeneracies of each shell
+        coordinates: coordinates (Å)
+        multiplicity: Multiplicity
+        ref_area: Reference area of benzene ring (Å²)
+
+    Returns:
+        circuits: Circuits
+
+    Raises:
+        ValueError: If number of unpaired electrons does not match multiplicity.
+    """
+    # Check if not open-shell
+    shell_occupations: Array1DFloat = np.asarray(shell_occupations)
+    degeneracies: Array1DInt = np.asarray(degeneracies)
+    mask = np.logical_and(
+        ~np.isclose(shell_occupations, 2), ~np.isclose(shell_occupations, 0)
+    )
+    unique: Array1DFloat
+    unique, indices, counts = np.unique(
+        shell_occupations[mask], return_counts=True, return_index=True
+    )
+    non_one = unique[unique != 1]
+    if len(non_one) > 0:
+        raise ValueError(f"Open shell layers with occupations: {non_one}")
+    if len(unique) > 0:
+        n_unpaired = counts[0] * degeneracies[mask][indices[0]]
+        if n_unpaired + 1 != multiplicity:
+            raise ValueError(
+                f"Number of unpaired electrons does {n_unpaired} not match "
+                f"multiplicity {multiplicity}. Open-shell calculation not supported."
+            )
+
+    huckel_matrix: Array2DFloat = np.asarray(huckel_matrix)
+    coordinates: Array2DFloat = np.asarray(coordinates)
+
+    # Calculate characteristic polynomial
+    roots_cp = np.linalg.eigvalsh(huckel_matrix)
+    cp = np.polynomial.Polynomial.fromroots(roots_cp)  # type: ignore
+
+    circuits = []
+    for indices in cycles:
+        indices = tuple(indices)
+
+        # Calculate reference polynomial
+        mask = np.ones(len(huckel_matrix), dtype=bool)
+        mask[list(indices)] = False
+        submatrix = huckel_matrix[mask, :][:, mask]
+        if len(submatrix) == 0:
+            rp = np.polynomial.Polynomial(1.0)  # type: ignore
+            roots_rp = rp.roots()  # type: ignore
+        else:
+            roots_rp = np.linalg.eigvalsh(submatrix)
+            rp = np.polynomial.Polynomial.fromroots(roots_rp)  # type: ignore
+
+        # Calculate A
+        A = []
+        for energy, occupation, degeneracy in zip(
+            shell_energies, shell_occupations, degeneracies
+        ):
+            if occupation == 0:
+                continue
+            elif degeneracy == 1:
+                f_k = rp(energy) / cp.deriv()(energy)
+            else:
+                p = energy - roots_rp
+                q = energy - roots_cp
+                q = q[~np.isclose(roots_cp, energy)]
+                dp = len(p)
+                dq = len(q)
+                max_deg = max(dp, dq) + degeneracy - 1
+                p: Array1DFloat = np.pad(p, (0, max_deg - dp))
+                q: Array1DFloat = np.pad(q, (0, max_deg - dq))
+                f_k = (
+                    1
+                    / math.factorial(degeneracy - 1)
+                    * poly_div_deriv(degeneracy - 1, dp, p, dq, q)
+                )
+            A.append(occupation * f_k)
+        A: Array1DFloat = np.array(A)
+        A *= 2
+
+        # Multiply by k_st for each bond
+        pairs = nx.utils.pairwise(indices, cyclic=True)
+        k_sts = huckel_matrix[tuple(zip(*pairs))]
+        A *= np.prod(k_sts)
+
+        # Calculate current intensity and diamagnetic susceptibility
+        polygon = Polygon(coordinates[list(indices)])
+        I = 4.5 * A * polygon.area / ref_area
+        X = 4.5 * A * (polygon.area / ref_area) ** 2
+
+        circuit = Circuit(
+            indices=indices,
+            A=A,
+            I=I,
+            X=X,
+            area=polygon.area,
+            ccw=polygon.exterior.is_ccw,
+        )
+        circuits.append(circuit)
+
+    return circuits
+
+
+def minimum_cycle_basis(
     connectivity_matrix: ArrayLike2D,
 ) -> tuple[tuple[int, ...], ...]:
-    """Return rings in graph sorted by length.
+    """Calculate minimum cycle basis from graph.
+
+    Does not return cycles of length one for graphs with one-node loops.
 
     Args:
         connectivity_matrix: Connectivity matrix
 
     Returns:
-        rings: Rings as list of list
+        cycle_basis: Cycle basis
     """
-    # Create graph
-    G = nx.convert_matrix.from_numpy_array(connectivity_matrix)
+    connectivity_matrix: Array2DInt = np.asarray(connectivity_matrix)
+    g = nx.from_numpy_array(connectivity_matrix)
 
-    # Loop over rings and keep unique ones
-    already_seen = set()
-    rings = []
-    cycle: list[int]
-    for cycle in list(nx.simple_cycles(G.to_directed())):
-        if len(cycle) > 2:
-            if frozenset(cycle) not in already_seen:
-                rings.append(cycle)
-                already_seen.add(frozenset(cycle))
-    rings.sort(key=len)
-    rings = tuple(tuple(ring) for ring in rings)
-
-    return rings
+    cycle_basis = tuple(
+        tuple(cycle) for cycle in nx.minimum_cycle_basis(g) if len(cycle) > 1
+    )
+    return cycle_basis
 
 
-def is_disconnected(edges: Sequence[tuple[int, int]]) -> bool:
+def is_disconnected(edges: Iterable[Iterable[int]]) -> bool:
     """Check whether edges form disconnected components.
 
     Args:
@@ -362,3 +491,178 @@ def is_disconnected(edges: Sequence[tuple[int, int]]) -> bool:
     disconnected = n > 1
 
     return disconnected
+
+
+def bond_analysis(
+    circuits: Iterable[Circuit],
+) -> tuple[dict[tuple[int, int], float], dict[frozenset[int], float]]:
+    """Analyze circuits with respect to bonds.
+
+    Args:
+        circuits: Circuits
+
+    Returns:
+        bc, m_bre: Bond currents and magnetic bond resonance energies
+    """
+    bc: defaultdict[tuple[int, int], float] = defaultdict(float)
+    m_bre: defaultdict[frozenset[int], float] = defaultdict(float)
+    for circuit in circuits:
+        pairs = nx.utils.pairwise(circuit.indices, cyclic=True)
+        for i, j in pairs:
+            A = sum(circuit.A)
+            I = sum(circuit.I)
+            if circuit.ccw is False:
+                I = -I
+            if i > j:
+                i, j = j, i
+                I = -I
+            bc[(i, j)] += I
+            m_bre[frozenset([i, j])] += A
+    bc = dict(bc)
+    m_bre = dict(m_bre)
+
+    return bc, m_bre
+
+
+def global_analysis(circuits: Iterable[Circuit]) -> tuple[float, float]:
+    """Analyze circuits with respect to global properties.
+
+    Args:
+        circuits: Circuits
+
+    Returns:
+        mre: Magnetic resonance energy
+        sus: Diamagnetic susceptibility
+    """
+    mre = sum(itertools.chain.from_iterable(circuit.A for circuit in circuits))
+    sus = sum(itertools.chain.from_iterable(circuit.X for circuit in circuits))
+
+    return mre, sus
+
+
+def calculate_m_sse(
+    circuits: Iterable[Circuit],
+    connectivity_matrix: ArrayLike2D,
+    excluded: Iterable[Iterable[int]],
+) -> float:
+    """Calculates magnetic superaromatic stabilization energy.
+
+    Args:
+        circuits: Circuits
+        excluded: Cycles to exclude from cycle basis
+        connectivity_matrix: Connectivity matrix
+
+    Returns:
+        m_sse: Magnetic superaromatic stabilization energy
+    """
+    # Calculate total MRE
+    mre_tot, _ = global_analysis(circuits)
+
+    # Calculate reduced MRE
+    reduced_cycles = cycles_from_connectivity(connectivity_matrix, excluded=excluded)
+    reduced_circuits = [
+        circuit for circuit in circuits if circuit.indices in reduced_cycles
+    ]
+    mre_reduced, _ = global_analysis(reduced_circuits)
+
+    m_sse = mre_tot - mre_reduced
+
+    return m_sse
+
+
+def edges_to_cycle(edges: Iterable[Iterable[int]]) -> tuple[int, ...]:
+    """Converts unordered sequeunce of cycle edges to ordered sequence of nodes.
+
+    Args:
+        edges: Unordered sequence of edges
+
+    Returns:
+        cycle: Ordered sequence of nodes
+
+    Raises:
+        ValueError: If wrong number of cycles found
+    """
+    # Create connectivity matrix
+    G = nx.from_edgelist(edges)
+    cycles = get_simple_cycles(G)
+    if len(cycles) == 0:
+        raise ValueError("No cycle found.")
+    elif len(cycles) > 1:
+        raise ValueError(f"One cycle expected, {len(cycles)} found.")
+    cycle = tuple(cycles[0])
+
+    return cycle
+
+
+def get_simple_cycles(G: nx.Graph) -> tuple[tuple[int, ...], ...]:
+    """Get simple cycles excluding those with size below 2.
+
+    Args:
+        G: NetworkX graph object
+
+    Returns:
+        simple_cycles: Simple cycles
+    """
+    already_seen = set()
+    simple_cycles: list[Sequence[int]] = []
+    cycle: Sequence[int]
+    for cycle in list(nx.simple_cycles(G.to_directed())):
+        if len(cycle) > 2:
+            if frozenset(cycle) not in already_seen:
+                simple_cycles.append(cycle)
+                already_seen.add(frozenset(cycle))
+    simple_cycles.sort(key=len)
+    simple_cycles = tuple(tuple(cycle) for cycle in simple_cycles)
+
+    return simple_cycles
+
+
+def cycles_from_connectivity(
+    connectivity_matrix: ArrayLike2D,
+    excluded: Iterable[Iterable[int]] | None = None,
+) -> tuple[tuple[int, ...], ...]:
+    """Get cycles with potential exclusion of base cycles.
+
+    Args:
+        connectivity_matrix: Connectivity matrix
+        excluded: Cycles to exclude from cycle basis
+
+    Returns:
+        cycles: Cycles
+
+    Raises:
+        ValueError: If excluded cycle not in basis
+    """
+    # Get all simple cycles
+    G = nx.convert_matrix.from_numpy_array(connectivity_matrix)
+    simple_cycles = get_simple_cycles(G)
+
+    # Loop over rings and keep unique ones
+
+    if excluded is not None:
+        excluded = [frozenset(cycle) for cycle in excluded]
+        ref_cycles = {frozenset(cycle): cycle for cycle in simple_cycles}
+        cycle_basis = []
+        excluded_cycles = []
+        for cycle in minimum_cycle_basis(connectivity_matrix):
+            if frozenset(cycle) in excluded:
+                excluded_cycles.append(frozenset(cycle))
+            else:
+                cycle_basis.append(ref_cycles[frozenset(cycle)])
+        if len(excluded_cycles) != len(excluded):
+            raise ValueError(
+                f"Excluded cycle not in cycle basis: {set(excluded).difference(excluded_cycles)}"
+            )
+
+        # Prune out disconnected cycles
+        cycles = cycle_edges_from_basis(cycle_basis)
+        cycles = tuple(cycle for cycle in cycles if is_disconnected(cycle) is False)
+        cycles = tuple(
+            ref_cycles.get(frozenset(itertools.chain.from_iterable(cycle)))
+            for cycle in cycles
+        )
+        cycles = tuple(cycle for cycle in cycles if cycle is not None)
+    else:
+        cycles = simple_cycles
+
+    return cycles

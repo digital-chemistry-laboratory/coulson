@@ -1,0 +1,10 @@
+name,indices,current
+Naphthalene,"1, 2, 3, 4, 5, 6",0.504
+Naphthalene,"1, 6, 7, 8, 9, 10",0.504
+Naphthalene,"1, 2, 3, 4, 5, 6, 7, 8, 9, 10",0.589
+Azulene,"1, 2, 3, 4, 10",0.038
+Azulene,"4, 5, 6, 7, 8, 9, 10",-0.043
+Azulene,"1, 2, 3, 4, 5, 6, 7, 8, 9, 10",1.111
+Bicyclo[6.2.0]decapentaene ,"1, 2, 3, 4, 5, 6, 7, 8",-3.08
+Bicyclo[6.2.0]decapentaene ,"5, 6, 9, 10",-1.064
+Bicyclo[6.2.0]decapentaene ,"1, 2, 3, 4, 5, 10, 9, 6, 7, 8",3.439
