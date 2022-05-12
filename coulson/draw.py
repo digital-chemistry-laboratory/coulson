@@ -127,6 +127,7 @@ def draw_orbital_energies(  # noqa: C901
     # Make energy labels
     for energy in energies_unique:
         ax.annotate(f"{energy:.03f}", (max(line_offsets) + 0.7, energy))
+    plt.close()
 
     return fig, ax
 
@@ -142,8 +143,9 @@ def draw_orbital_energies(  # noqa: C901
 )
 def draw_mol(  # noqa: C901
     mol: "Chem.Mol",
+    mol_label: str | None = None,
     properties: Iterable[float] | None = None,
-    atom_numbers: bool = True,
+    atom_numbers: bool = False,
     atom_labels: Iterable[float] | None = None,
     bond_numbers: bool = False,
     bond_labels: Iterable[float] | None = None,
@@ -163,6 +165,7 @@ def draw_mol(  # noqa: C901
 
     Args:
         mol: Molecule
+        label: Molecule label
         properties: Properties for contour plot
         atom_numbers: Whether to print atom numbers
         atom_labels: Labels to print for atoms
@@ -237,8 +240,13 @@ def draw_mol(  # noqa: C901
         mol = rw_mol.GetMol()
 
     # Draw mol
+    if mol_label is None:
+        mol_label = ""
     d2d.DrawMolecule(
-        mol, highlightAtoms=highlighted_atoms, highlightBonds=highlighted_bonds
+        mol,
+        legend=mol_label,
+        highlightAtoms=highlighted_atoms,
+        highlightBonds=highlighted_bonds,
     )
 
     # Draw circles
