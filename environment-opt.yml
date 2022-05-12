@@ -1,3 +1,4 @@
 dependencies:
   - matplotlib
   - rdkit
+  - pyscf
