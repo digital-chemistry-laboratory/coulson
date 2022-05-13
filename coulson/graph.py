@@ -22,7 +22,7 @@ from coulson.typing import (
     ArrayLike1D,
     ArrayLike2D,
 )
-from coulson.utils import Import, requires_dependency
+from coulson.utils import Import, occupations_from_multiplicity, requires_dependency
 
 if typing.TYPE_CHECKING:  # pragma: no cover
     from shapely import Polygon  # pragma: no cover
@@ -79,7 +79,7 @@ def calculate_bre(
 
 
 def calculate_tre(
-    huckel_matrix: ArrayLike2D, occupations: ArrayLike1D
+    huckel_matrix: ArrayLike2D, n_electrons: int, multiplicity: int = 1
 ) -> tuple[float, float]:
     """Calculate topological resonance energy according to the recipe of Aihara.
 
@@ -87,14 +87,16 @@ def calculate_tre(
 
     Args:
         huckel_matrix: Hückel matrix
-        occupations: Orbital occupations
+        n_electrons: Number of electrons
+        multiplicity: Multiplicity
 
     Returns:
         tre: Topological resonance energy
         p_tre: Percentage topological resonance energy
     """
     huckel_matrix: Array2DFloat = np.asarray(huckel_matrix)
-    occupations: Array1DFloat = np.asarray(occupations)
+    n_orbitals = len(huckel_matrix)
+    occupations = occupations_from_multiplicity(n_electrons, n_orbitals, multiplicity)
 
     # Set up graph and set weights
     G = nx.Graph(huckel_matrix)
@@ -502,10 +504,10 @@ def bond_analysis(
         circuits: Circuits
 
     Returns:
-        bc, m_bre: Bond currents and magnetic bond resonance energies
+        bcs, m_bres: Bond currents and magnetic bond resonance energies
     """
-    bc: defaultdict[tuple[int, int], float] = defaultdict(float)
-    m_bre: defaultdict[frozenset[int], float] = defaultdict(float)
+    bcs: defaultdict[tuple[int, int], float] = defaultdict(float)
+    m_bres: defaultdict[frozenset[int], float] = defaultdict(float)
     for circuit in circuits:
         pairs = nx.utils.pairwise(circuit.indices, cyclic=True)
         for i, j in pairs:
@@ -516,12 +518,12 @@ def bond_analysis(
             if i > j:
                 i, j = j, i
                 I = -I
-            bc[(i, j)] += I
-            m_bre[frozenset([i, j])] += A
-    bc = dict(bc)
-    m_bre = dict(m_bre)
+            bcs[(i, j)] += I
+            m_bres[frozenset([i, j])] += A
+    bcs = dict(bcs)
+    m_bres = dict(m_bres)
 
-    return bc, m_bre
+    return bcs, m_bres
 
 
 def global_analysis(circuits: Iterable[Circuit]) -> tuple[float, float]:

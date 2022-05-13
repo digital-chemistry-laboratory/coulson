@@ -9,6 +9,7 @@ import networkx as nx
 import numpy as np
 
 from coulson.graph import Circuit
+from coulson.interface import coords_2D_from_rdkit
 from coulson.typing import (
     Array1DFloat,
     Array1DInt,
@@ -165,7 +166,7 @@ def draw_mol(  # noqa: C901
 
     Args:
         mol: Molecule
-        label: Molecule label
+        mol_label: Molecule label
         properties: Properties for contour plot
         atom_numbers: Whether to print atom numbers
         atom_labels: Labels to print for atoms
@@ -198,6 +199,10 @@ def draw_mol(  # noqa: C901
 
     # Copy mol object to prevent editing it in place
     mol = Chem.Mol(mol)
+
+    # Generate 2D coordinates
+    if mol.GetNumConformers() == 0:
+        _ = coords_2D_from_rdkit(mol)
 
     # Create drawing object according to image format
     if img_format == "png":

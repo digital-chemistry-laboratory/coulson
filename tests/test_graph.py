@@ -135,8 +135,7 @@ def test_tre_pah(pah_data):
     huckel_matrix, electrons = prepare_huckel_matrix(
         input_data.atom_types, input_data.connectivity_matrix
     )
-    huckel = HuckelCalculator(huckel_matrix, electrons, charge=int(data["charge"]))
-    tre, p_tre = calculate_tre(huckel_matrix, huckel.occupations)
+    tre, p_tre = calculate_tre(huckel_matrix, sum(electrons) - int(data["charge"]))
 
     assert_almost_equal(tre, float(data["tre"]), decimal=4)
     assert_almost_equal(p_tre, float(data["p_tre"]), decimal=3)
@@ -150,20 +149,7 @@ def test_tre_pah_charged(pah_charged_data):
     huckel_matrix, electrons = prepare_huckel_matrix(
         input_data.atom_types, input_data.connectivity_matrix
     )
-    huckel = HuckelCalculator(huckel_matrix, electrons, charge=int(data["charge"]))
-
-    # Set occupations to closed-shell for open-shell species
-    occupations: Array1DFloat
-    if data["name"] in ["Benzene", "Triphenylene", "Coronene"]:
-        occupations = np.array(
-            [2] * int(len(huckel_matrix) / 2 - 1)
-            + [0] * int(len(huckel_matrix) / 2 + 1),
-            dtype=float,
-        )
-    else:
-        occupations = huckel.occupations
-
-    tre, _ = calculate_tre(huckel_matrix, occupations)
+    tre, _ = calculate_tre(huckel_matrix, sum(electrons) - int(data["charge"]))
 
     assert_almost_equal(tre, float(data["tre"]), decimal=3)
 
@@ -176,8 +162,7 @@ def test_tre_nonbenz(nonbenz_data):
     huckel_matrix, electrons = prepare_huckel_matrix(
         input_data.atom_types, input_data.connectivity_matrix
     )
-    huckel = HuckelCalculator(huckel_matrix, electrons, charge=int(data["charge"]))
-    tre, p_tre = calculate_tre(huckel_matrix, huckel.occupations)
+    tre, p_tre = calculate_tre(huckel_matrix, sum(electrons) - int(data["charge"]))
 
     assert_almost_equal(tre, float(data["tre"]), decimal=4)
     assert_almost_equal(p_tre, float(data["p_tre"]), decimal=3)
@@ -191,8 +176,7 @@ def test_tre_hetero(hetero_data):
     huckel_matrix, electrons = prepare_huckel_matrix(
         input_data.atom_types, input_data.connectivity_matrix
     )
-    huckel = HuckelCalculator(huckel_matrix, electrons, charge=int(data["charge"]))
-    tre, p_tre = calculate_tre(huckel_matrix, huckel.occupations)
+    tre, p_tre = calculate_tre(huckel_matrix, sum(electrons) - int(data["charge"]))
 
     assert_almost_equal(tre, float(data["tre"]), decimal=4)
     assert_almost_equal(p_tre, float(data["p_tre"]), decimal=3)
