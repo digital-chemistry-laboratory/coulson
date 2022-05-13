@@ -19,9 +19,8 @@ from coulson.graph import (
     cycles_from_connectivity,
     global_analysis,
 )
-from coulson.huckel import HuckelCalculator
+from coulson.huckel import HuckelCalculator, prepare_huckel_matrix
 from coulson.interface import coords_2D_from_rdkit, process_rdkit_mol, scale_rdkit_mol
-from coulson.matrix import prepare_huckel_matrix
 from coulson.typing import Array1DFloat
 
 DATA_DIR = Path(__file__).parent / "data" / "graph"
