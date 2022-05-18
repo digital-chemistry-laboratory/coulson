@@ -7,6 +7,7 @@ import functools
 import itertools
 import typing
 from typing import Any, cast
+import warnings
 
 import networkx as nx
 import numpy as np
@@ -441,12 +442,12 @@ def gen_coords_for_mol(
     Returns:
         coordinates: 2D coordinates (Å)
 
-    Raises:
-        ValueError: If Mol has coordinates already
+    Warns:
+        If Mol has coordinates already
     """
     n_conformers = mol.GetNumConformers()
     if n_conformers > 0:
-        raise ValueError(f"Mol already has coordinates: {n_conformers} conformers")
+        warnings.warn(f"Mol already has coordinates: {n_conformers} conformers")
     if coordgen is True:
         ps = rdCoordGen.CoordGenParams()
         ps.minimizerPrecision = ps.sketcherBestPrecision

@@ -249,15 +249,14 @@ def draw_mol(  # noqa: C901
     # Draw mol
     if mol_label is None:
         mol_label = ""
-        Chem.Draw.PrepareAndDrawMolecule(
-            d2d,
-            # d2d.DrawMolecule(
-            mol,
-            legend=mol_label,
-            highlightAtoms=highlighted_atoms,
-            highlightBonds=highlighted_bonds,
-            kekulize=False,
-        )
+    Chem.Draw.PrepareAndDrawMolecule(
+        d2d,
+        mol,
+        legend=mol_label,
+        highlightAtoms=highlighted_atoms,
+        highlightBonds=highlighted_bonds,
+        kekulize=False,
+    )
 
     # Draw properties with similarity map
     if properties is not None:
