@@ -4,7 +4,7 @@
 from numpy.testing import assert_array_equal
 import pytest
 
-from coulson.matrix import prepare_huckel_matrix
+from coulson.huckel import prepare_huckel_matrix
 
 
 @pytest.mark.parametrize(

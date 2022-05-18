@@ -15,13 +15,13 @@ def tests(session: Session) -> None:
     """Run tests."""
     args = session.posargs or ["--cov", "--import-mode=importlib", "-s"]
     session.conda_install("pytest", "pytest-cov")
-    session.conda_install("networkx", "numpy", "rdkit", "scipy")
+    session.conda_install("networkx", "numpy", "rdkit", "scipy", "shapely")
     session.install(".", "--no-deps")
     session.run("pytest", *args)
 
 
 # Linting
-@nox.session(python="3.8")
+@nox.session(python="3.9")
 def lint(session: Session) -> None:
     """Lint code."""
     args = session.posargs or locations
@@ -38,7 +38,7 @@ def lint(session: Session) -> None:
 
 
 # Code formatting
-@nox.session(python="3.8")
+@nox.session(python="3.9")
 def black(session: Session) -> None:
     """Format code."""
     args = session.posargs or locations
@@ -47,9 +47,10 @@ def black(session: Session) -> None:
 
 
 # Static typing
-@nox.session(python="3.8")
+@nox.session(venv_backend="mamba", python="3.9")
 def mypy(session: Session) -> None:
     """Run the static type checker."""
     args = session.posargs or locations
-    session.install("mypy")
+    session.conda_install("mypy")
+    session.conda_install("networkx", "numpy", "rdkit", "scipy", "shapely")
     session.run("mypy", *args)

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from typing import List, Sequence, Tuple
 
 import numpy as np
 from rdkit import Chem
+
+from coulson.typing import Array1DFloat, Array2DFloat
 
 
 @dataclass
@@ -27,8 +29,8 @@ class Atom:
     """Atom object."""
 
     idx: int
-    bonds: List["Bond"] = field(default_factory=list)
-    orbitals: List["Orbital"] = field(default_factory=list)
+    bonds: list[Bond] = field(default_factory=list)
+    orbitals: list[Orbital] = field(default_factory=list)
 
 
 @dataclass
@@ -36,11 +38,11 @@ class Bond:
     """Bond object."""
 
     idx: int
-    atoms: List["Atom"] = field(default_factory=list)
-    orbitals: List["Orbital"] = field(default_factory=list)
+    atoms: list[Atom] = field(default_factory=list)
+    orbitals: list[Orbital] = field(default_factory=list)
 
 
-def get_hyb_str(symbol: str, hybridization: "Chem.HybridizationType") -> str:
+def get_hyb_str(symbol: str, hybridization: Chem.HybridizationType) -> str:
     """Get hybridization string from symbol and RDKit hybridization type.
 
     Args:
@@ -61,8 +63,8 @@ def get_hyb_str(symbol: str, hybridization: "Chem.HybridizationType") -> str:
 
 
 def _get_atoms_bonds(
-    mol: "Chem.Mol", sigma_only: bool = True
-) -> Tuple[Sequence["Atom"], Sequence["Bond"]]:
+    mol: Chem.Mol, sigma_only: bool = True
+) -> tuple[list[Atom], list[Bond]]:
     """Get list of atoms and bonds with associated bond orbitals.
 
     Args:
@@ -138,8 +140,8 @@ def _get_atoms_bonds(
 
 
 def _get_charge_displacements(
-    bonds: Sequence["Bond"], orbital_order: List[List[int]]
-) -> Sequence[float]:
+    bonds: Iterable[Bond], orbital_order: Sequence[Sequence[int]]
+) -> Array1DFloat:
     """Returns charge displacement for bonds.
 
     Args:
@@ -188,7 +190,7 @@ def _get_charge_displacements(
         all_delta_qs.append(delta_qs)
         en_diff = orb_j.en - orb_i.en
         en_diffs.append(en_diff)
-    delta_q_matrix = np.vstack(all_delta_qs)
+    delta_q_matrix: Array2DFloat = np.vstack(all_delta_qs)
 
     # Solve equations
     delta_qs = np.linalg.solve(delta_q_matrix, en_diffs)
@@ -196,7 +198,7 @@ def _get_charge_displacements(
     return delta_qs
 
 
-def get_sigma_charges(mol: "Chem.Mol", sigma_only: bool = True) -> Sequence[float]:
+def get_sigma_charges(mol: Chem.Mol, sigma_only: bool = True) -> Array1DFloat:
     """Get charges in sigma framework from electronengativity equalization.
 
     Uses the procedure and data from Bergmann and Hinze: 978-3-540-17740-1.
@@ -234,7 +236,7 @@ def get_sigma_charges(mol: "Chem.Mol", sigma_only: bool = True) -> Sequence[floa
             delta_q = delta_qs[idx] * sign
             delta_qs_atom.append(delta_q)
         atom_charges.append(sum(delta_qs_atom))
-    atom_charges = np.array(atom_charges)
+    atom_charges: Array1DFloat = np.array(atom_charges)
 
     return atom_charges
 

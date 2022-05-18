@@ -4,36 +4,53 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from importlib import import_module
-from typing import Callable, List, NoReturn, Sequence
+from typing import Callable, NoReturn, Sequence
 
-import networkx as nx
+import numpy as np
+
+from coulson.typing import Array1DInt
 
 
-def rings_from_connectivity(
-    connectivity_matrix: Sequence[Sequence[int]],
-) -> List[List[int]]:
-    """Return rings in graph sorted by length.
+def get_multiplicity(n_electrons: int) -> int:
+    """Set multiplicity based on number of electrons.
 
     Args:
-        connectivity_matrix: Connectivity matrix
+        n_electrons: Number of electrons
 
     Returns:
-        rings: Rings as list of list
+        multiplicity: Multiplicity
+
+    Raises:
+        ValueError: If number of electrons and multiplicity does not match
     """
-    # Create graph
-    G = nx.convert_matrix.from_numpy_array(connectivity_matrix)
+    multiplicity = (n_electrons % 2) + 1
 
-    # Loop over rings and keep unique ones
-    already_seen = set()
-    rings = []
-    for i in list(nx.simple_cycles(G.to_directed())):
-        if len(i) > 2:
-            if frozenset(i) not in already_seen:
-                rings.append(i)
-                already_seen.add(frozenset(i))
-    rings.sort(key=len)
+    if (n_electrons % 2) == (multiplicity % 2):
+        raise ValueError(
+            f"Combination of number of electrons {n_electrons} "
+            f"and multiplicity {multiplicity} not possible!"
+        )
+    return multiplicity
 
-    return rings
+
+def occupations_from_multiplicity(
+    n_electrons: int, n_orbitals: int, multiplicity: int
+) -> Array1DInt:
+    """Simple occupation calculator which does not take degeneracies into account.
+
+    Args:
+        n_electrons: Number of electrons
+        n_orbitals: Number of orbitals
+        multiplicity: Multiplicity
+
+    Returns:
+        occupations: Orbital occupations
+    """
+    n_singly = multiplicity - 1
+    n_doubly = int((n_electrons - n_singly) / 2)
+    n_empty = n_orbitals - n_doubly - n_singly
+    occupations: Array1DInt = np.array([2] * n_doubly + [1] * n_singly + [0] * n_empty)
+    return occupations
 
 
 @dataclass
@@ -41,11 +58,13 @@ class Import:
     """Class for handling optional dependency imports."""
 
     module: str
-    item: str = None
-    alias: str = None
+    item: str | None = None
+    alias: str | None = None
 
 
-def requires_dependency(imports: Sequence, _globals: dict) -> Callable:  # noqa: C901
+def requires_dependency(  # noqa: C901
+    imports: Sequence[Import], _globals: dict
+) -> Callable:
     """Decorator factory to control optional dependencies.
 
     Args:

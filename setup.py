@@ -13,7 +13,7 @@ setuptools.setup(
     long_description_content_type="text/x-markdown",
     url="",
     packages=setuptools.find_packages(),
-    install_requires=["numpy", "networkx", "scipy"],
+    install_requires=["numpy", "networkx", "scipy", "shapely"],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",

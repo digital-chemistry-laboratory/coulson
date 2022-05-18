@@ -6,8 +6,7 @@ import pytest
 from rdkit import Chem
 
 from coulson.draw import draw_mol, draw_orbital_energies
-from coulson.huckel import HuckelCalculator
-from coulson.matrix import prepare_huckel_matrix
+from coulson.huckel import HuckelCalculator, prepare_huckel_matrix
 
 matplotlib.use("Agg")
 
@@ -74,7 +73,7 @@ def test_draw_mol_svg(huckel_input):
     huckel_matrix, n_electrons = huckel_input
     hc = HuckelCalculator(huckel_matrix, n_electrons)
     bond_orders = [
-        hc.bond_order(bond.GetBeginAtomIdx() + 1, bond.GetEndAtomIdx() + 1)
+        hc.bond_order(bond.GetBeginAtomIdx(), bond.GetEndAtomIdx())
         for bond in mol.GetBonds()
     ]
     drawing_text = draw_mol(

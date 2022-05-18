@@ -1,0 +1,20 @@
+name,smiles,charge,tre,p_tre
+Pentalene,C1=CC=C2C=CC=C12,0,-0.2152,-2.017
+Azulene,C1=CC=C2C=CC=CC=C12,0,0.1511,1.143
+Heptalene,C1=CC=CC=C2C=CC=CC=C12,0,-0.141,-0.895
+Bicyclo[6.2.0]decapentaene,C12=CC=CC=CC=C2C=C1,0,-0.4609,-3.464
+Triafulvalene,C1(/C=C1)=C2C=C\2,0,-0.4607,-5.813
+Fulvalene,C=1\C=C/C(/C=1)=C2\C=C/C=C2,0,-0.2992,-2.284
+Heptafulvalene,C1(/C=CC=CC=C1)=C2C=CC=CC=C/2,0,-0.2182,-1.198
+s-Indacene,C1=CC=C2C=C3C=CC=C3C=C12,0,0.0547,0.338
+as-Indacene,C1=CC=C2C=CC3=CC=CC3=C12,0,-0.3056,-1.886
+Pyracylene,C1(C=C2)=C(C2=CC=C3C=C4)C3=C4C=C1,0,0.1064,0.551
+Cyclopentadienide ion,C1=CC=C[CH-]1,-1,0.3168,5.146
+Tropylium ion,C1=C[CH+]C=CC=C1,1,0.2253,2.572
+Pentalene dianion,C1=CC=C2C=CC=C12,-2,0.4638,4.642
+Heptalene dication,C1=CC=CC=C2C=CC=CC=C12,2,0.3138,2.05
+Fulvalene dianion,C=1\C=C/C(/C=1)=C2\C=C/C=C2,-2,0.5808,4.563
+Heptafulvalene dication,C1(/C=CC=CC=C1)=C2C=CC=CC=C/2,2,0.4123,2.296
+s-Indacene dianion,C1=CC=C2C=C3C=CC=C3C=C12,-2,0.4746,3.012
+as-Indacene dianion,C1=CC=C2C=CC3=CC=CC3=C12,-2,0.5735,3.629
+Pyracylene dianion,C1(C=C2)=C(C2=CC=C3C=C4)C3=C4C=C1,-2,0.5393,2.857

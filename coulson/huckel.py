@@ -1,13 +1,22 @@
 """Hückel calculator."""
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Iterable
+from dataclasses import dataclass
 import itertools
-from typing import Sequence
+from typing import Sequence, Tuple
 
 import numpy as np
 
-from coulson.utils import rings_from_connectivity
+from coulson.graph_utils import get_simple_cycles
+from coulson.parameters import beta_from_r, N_ELECTRONS, PARAMETER_SETS
+from coulson.typing import (
+    Array1DFloat,
+    Array1DInt,
+    Array2DFloat,
+    Array2DInt,
+    ArrayLike2D,
+)
 
 
 class HuckelCalculator:
@@ -24,6 +33,7 @@ class HuckelCalculator:
         bo_matrix: Bond order matrix
         charges: Atomic charges
         coefficients: Coefficients
+        degeneracies: Degeneracies
         energies: Energies
         multiplicity: Multiplicity
         electrons: Number of electrons contributed by each atom
@@ -36,15 +46,32 @@ class HuckelCalculator:
         spin_occupations: Orbitals occupations of unpaired electrons
     """
 
+    bo_matrix: Array2DFloat
+    charges: Array1DFloat
+    coefficients: Array2DFloat
+    degeneracies: Array1DInt
+    energies: Array1DFloat
+    multiplicity: int
+    electrons: Iterable[int]
+    n_electrons: int
+    n_occupied: int
+    n_orbitals: int
+    n_unpaired: int
+    occupations: Array1DFloat
+    spin_densities: Array1DFloat
+    spin_occupations: Array1DFloat
+    _D: Array2DFloat
+    _D_spin: Array2DFloat
+
     def __init__(
         self,
-        huckel_matrix: Sequence[Sequence],
-        electrons: Collection[int],
+        huckel_matrix: ArrayLike2D,
+        electrons: Iterable[int],
         charge: int = 0,
-        multiplicity: int = None,
+        multiplicity: int | None = None,
         n_dec_degen: int = 3,
     ) -> None:
-        huckel_matrix = np.array(huckel_matrix)
+        huckel_matrix: Array2DFloat = np.array(huckel_matrix)
         self.huckel_matrix = huckel_matrix
 
         # Set up number of electrons
@@ -52,9 +79,9 @@ class HuckelCalculator:
         n_electrons = sum(electrons) - charge
 
         # Create connectivity matrix
-        connectivity_matrix = np.array(huckel_matrix)
+        connectivity_matrix: Array2DInt = np.zeros_like(huckel_matrix, dtype=int)
+        connectivity_matrix[huckel_matrix.nonzero()] = 1
         np.fill_diagonal(connectivity_matrix, 0)
-        connectivity_matrix[connectivity_matrix.nonzero()] = 1
         self.connectivity_matrix = connectivity_matrix
 
         # Get number of orbitals
@@ -73,15 +100,6 @@ class HuckelCalculator:
         self.n_excess_spin = multiplicity - 1
         self.multiplicity = multiplicity
         self.n_electrons = n_electrons
-        self.n_occupied = None
-        self.energies = None
-        self.occupations = None
-        self.spin_occupations = None
-        self.charges = None
-        self.spin_densities = None
-        self.bo_matrix = None
-        self._D = None
-        self._D_spin = None
         self.n_dec_degen = n_dec_degen
 
         # Make calculations
@@ -93,19 +111,19 @@ class HuckelCalculator:
         """Returns bond order between two atoms.
 
         Args:
-            i: Index of atom 1 (1-indexed)
-            j: Index of atom 2 (1-indexed)
+            i: Index of atom 1
+            j: Index of atom 2
 
         Returns:
             bo: Bond order
         """
-        bo = self.bo_matrix[i - 1, j - 1]
+        bo: float = self.bo_matrix[i, j]
 
         return bo
 
     def calculate_i_ring(
         self,
-        indices: Sequence,
+        indices: Iterable[int],
         normalize: bool = True,
         permute: bool = False,
         norm_method: str = "solà",
@@ -113,7 +131,7 @@ class HuckelCalculator:
         """Returns the I_ring or MCI indices.
 
         Args:
-            indices: Indices of ring sequential order as bonded (1-indexed)
+            indices: Indices of ring sequential order as bonded
             normalize: Whether to normalize with respect to ring size
             permute: Whether to do all permutations of ring indices to get MCI
             norm_method: Method to use for normalization: 'mandado' or 'solà'
@@ -125,21 +143,21 @@ class HuckelCalculator:
             ValueError: When norm_method is not correct.
         """
         # Calculate I_ring
-        indices = list(indices)
+        indices = tuple(indices)
         n_atoms = len(indices)
 
         # Set up list of indices to calculate
         if permute is True:
-            i_ring_indices = itertools.permutations(indices, n_atoms)
+            i_ring_indices = list(itertools.permutations(indices, n_atoms))
         else:
             i_ring_indices = [indices]
 
         # Calculate I_ring
-        i_rings = []
+        i_rings: list[float] = []
         for indices in i_ring_indices:
             i_ring = 1
             for (i, j) in zip(indices, indices[1:] + indices[:1]):
-                i_ring *= self.bo_matrix[i - 1, j - 1]
+                i_ring *= self.bo_matrix[i, j]
             i_rings.append(i_ring)
         index = sum(i_rings)
 
@@ -162,7 +180,7 @@ class HuckelCalculator:
         Returns:
             rings: Rings
         """
-        rings = rings_from_connectivity(self.connectivity_matrix)
+        rings = get_simple_cycles(self.connectivity_matrix)
         rings = [[i + 1 for i in ring] for ring in rings]
         return rings
 
@@ -187,8 +205,15 @@ class HuckelCalculator:
         # Loop over unique rounded orbital energies and degeneracies and fill with
         # electrons
         energies_rounded = self.energies.round(self.n_dec_degen)
-        unique_energies, degeneracies = np.unique(energies_rounded, return_counts=True)
-        for energy, degeneracy in zip(np.flip(unique_energies), np.flip(degeneracies)):
+        unique_energies_rounded: Array1DFloat
+        degeneracies: Array1DInt
+        unique_energies_rounded, indices, degeneracies = np.unique(
+            energies_rounded, return_index=True, return_counts=True
+        )
+        unique_energies = np.flip(self.energies[indices])
+        unique_energies_rounded = np.flip(unique_energies_rounded)
+        degeneracies = np.flip(degeneracies)
+        for energy, degeneracy in zip(unique_energies_rounded, degeneracies):
             if len(all_electrons) == 0:
                 break
 
@@ -208,15 +233,25 @@ class HuckelCalculator:
                 spin_electrons / degeneracy
             )
 
-        n_occupied = np.count_nonzero(occupations)
+        n_occupied: int = np.count_nonzero(occupations)
         n_unpaired = int(
             np.sum(occupations[:n_occupied][occupations[:n_occupied] != 2])
         )
 
+        # Set shell occupations
+        shell_occupations = np.zeros_like(unique_energies)
+        i = 0
+        for j, degeneracy in enumerate(degeneracies):
+            shell_occupations[j] = sum(occupations[i : i + degeneracy]) / degeneracy
+            i += degeneracy
+
         self.occupations = occupations
+        self.shell_occupations_avg = shell_occupations
         self.spin_occupations = spin_occupations
         self.n_occupied = n_occupied
         self.n_unpaired = n_unpaired
+        self.unique_energies = unique_energies
+        self.degeneracies = degeneracies
 
     def _calculate_bond_orders(self) -> None:
         # Set up density matrices
@@ -240,3 +275,67 @@ class HuckelCalculator:
         self.bo_matrix = D
         self.charges = self.electrons - np.diag(D)
         self.spin_densities = np.diag(D_spin)
+
+
+@dataclass
+class InputData:
+    """Class for handling input to Hückel and PPP calculations."""
+
+    atom_types: Sequence[str]
+    coordinates: Array2DFloat
+    connectivity_matrix: Array2DFloat
+    twist_angles: Array2DFloat | None = None
+    sigma_charges: Array1DFloat | None = None
+
+
+def prepare_huckel_matrix(
+    atom_types: Sequence[str],
+    connectivity_matrix: ArrayLike2D,
+    parametrization: str = "van-catledge",
+    var_cc: bool = False,
+    var_cc_method: str = "hlhs",
+    distance_matrix: ArrayLike2D | None = None,
+) -> Tuple[Array2DFloat, list[int]]:
+    """Prepare Hückel matrix from atom types and connectivity.
+
+    Args:
+        atom_types: Atom types
+        connectivity_matrix: Connectivity matrix
+        parametrization: Parametrization: 'hess-schaad', 'streitwieser' or
+            'van-catledge' (default)
+        var_cc: Whether to adjust C-C β values by bond length.
+        var_cc_method: Method for variable β: 'hlhs' (default) or 'hssh'
+        distance_matrix: Distance matrix (Å)
+
+    Returns:
+        huckel_matrix: Hückel matrix
+        electrons: Number of electrons contributed by each atom
+
+    Raises:
+        ValueError: If var_cc requested but distance_matrix not given.
+    """
+    # Build huckel matrix
+    huckel_matrix: Array2DFloat = np.asarray(connectivity_matrix, dtype=float)
+    parameters = PARAMETER_SETS[parametrization]
+
+    # Set k_xy values
+    for i, j in zip(*np.nonzero(connectivity_matrix)):
+        # Set variable betas from distance matrix
+        if var_cc is True and (atom_types[i], atom_types[j]) == ("C", "C"):
+            if distance_matrix is not None:
+                distance_matrix = np.asarray(distance_matrix)
+            else:
+                raise ValueError("Distance matrix needed.")
+            k_xy = beta_from_r(distance_matrix[i, j], method=var_cc_method)
+        else:
+            k_xy = parameters.get_k_xy(atom_types[i], atom_types[j])
+        huckel_matrix[i, j] = k_xy
+
+    # Set h_x values
+    h_x_values = [parameters.get_h_x(atom_type) for atom_type in atom_types]
+    huckel_matrix[np.diag_indices_from(huckel_matrix)] = h_x_values
+
+    # Calculate number of electrons
+    electrons = [N_ELECTRONS[atom_type] for atom_type in atom_types]
+
+    return huckel_matrix, electrons

@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import itertools
-from typing import Sequence, Tuple
 
 import numpy as np
+
+from coulson.typing import Array2DFloat, Array4DFloat
 
 
 def generate_excitations(  # noqa: C901
     n_occupied: int,
     n_virtual: int,
-) -> Sequence[Tuple[Tuple[int, ...], Tuple[int, ...], str]]:
+) -> list[tuple[tuple[int, ...], tuple[int, ...], str]]:
     """Generate excitations with specific truncation.
 
     Args:
@@ -21,10 +22,10 @@ def generate_excitations(  # noqa: C901
     Returns:
         excitaitons: Sequence of excitations
     """
-    excitations = []
+    excitations: list[tuple[tuple[int, ...], tuple[int, ...], str]] = []
 
     # Generate ground state dummy excitation
-    excitations.append(((), (), "g"))
+    excitations.append(((0,), (0,), "g"))
 
     # Add single excitations
     single_excitations_pre = list(
@@ -43,11 +44,11 @@ def generate_excitations(  # noqa: C901
 
 
 def calculate_matrix_element(  # noqa: C901
-    excitation_1: Tuple[Tuple[int, ...], Tuple[int, ...], str],
-    excitation_2: Tuple[Tuple[int, ...], Tuple[int, ...], str],
+    excitation_1: tuple[tuple[int, ...], tuple[int, ...], str],
+    excitation_2: tuple[tuple[int, ...], tuple[int, ...], str],
     e_0: float,
-    fock_matrix_mo: Sequence[Sequence[float]],
-    mo_integrals: Sequence[Sequence[Sequence[Sequence[float]]]],
+    fock_matrix_mo: Array2DFloat,
+    mo_integrals: Array4DFloat,
     multiplicity: str = "singlet",
 ) -> float:
     """Returns matrix element between two state configuration functions (CSFs).

@@ -2,28 +2,42 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 import functools
 import itertools
 import typing
-from typing import Any, Sequence, Tuple
+from typing import Any, cast
+import warnings
 
 import networkx as nx
 import numpy as np
 import scipy.spatial
 
 from coulson.data import COV_RADII_PYYKKO, SYMBOLS_TO_NUMBERS
-from coulson.matrix import InputData
+from coulson.graph_utils import order_cycle
+from coulson.huckel import InputData
+from coulson.typing import (
+    Array1DBool,
+    Array1DFloat,
+    Array1DInt,
+    Array1DStr,
+    Array2DFloat,
+    Array2DInt,
+    ArrayLike1D,
+    ArrayLike2D,
+)
 from coulson.utils import Import, requires_dependency
 
 if typing.TYPE_CHECKING:  # pragma: no cover
     import pyscf  # pragma: no cover
     from rdkit import Chem  # pragma: no cover
+    from rdkit.Chem import AllChem, rdCoordGen
 
     from coulson.ppp import PPPCalculator  # pragma: no cover
 
 
 @requires_dependency([Import(module="pyscf")], globals())
-def get_pyscf_mf(ppp: "PPPCalculator", spin: float = None) -> Any:
+def get_pyscf_mf(ppp: PPPCalculator, spin: float | None = None) -> pyscf.scf.HF:
     """Converts PPP calculator object into PySCF SCF object.
 
     Args:
@@ -59,14 +73,14 @@ def get_pyscf_mf(ppp: "PPPCalculator", spin: float = None) -> Any:
     fock_matrix = ppp.fock_matrix
 
     def energy_tot(
-        self: Any,
-        dm: Sequence[Sequence[float]] = None,
-        h1e: Any = None,
-        vhf: Any = None,
+        self: pyscf.scf.HF,
+        dm: Array2DFloat | None = None,
+        h1e: Any | None = None,
+        vhf: Any | None = None,
     ) -> float:
         """Modified total energy function that ignores nuclear interactions."""
         nuc = mf.energy_nuc()
-        e_elec = mf.energy_elec(dm, h1e, vhf)[0]
+        e_elec: float = mf.energy_elec(dm, h1e, vhf)[0]
         mf.scf_summary["nuc"] = nuc.real
 
         return e_elec
@@ -91,8 +105,8 @@ def get_pyscf_mf(ppp: "PPPCalculator", spin: float = None) -> Any:
 
 
 def assign_atom_types(  # noqa: C901
-    symbols: Sequence[str], degrees: Sequence[int]
-) -> Tuple[Sequence[str], Sequence[int]]:
+    symbols: Iterable[str], degrees: Iterable[int]
+) -> tuple[Array1DStr, Array1DInt]:
     """Assigns atom types based and which atoms to remove.
 
     Args:
@@ -106,7 +120,7 @@ def assign_atom_types(  # noqa: C901
     Raises:
         NotImplementedError: When atom type does not have parameters.
     """
-    atom_types = []
+    atom_types: list[str | None] = []
     to_remove = []
     for i, (symbol, degree) in enumerate(zip(symbols, degrees)):
         if symbol == "H":
@@ -154,15 +168,15 @@ def assign_atom_types(  # noqa: C901
                 )
         else:
             raise NotImplementedError(f"Atom type {symbol} is not implemented!")
-    to_remove = np.array(to_remove, dtype=int)
-    atom_types = np.array(atom_types)
+    to_remove: Array1DInt = np.array(to_remove, dtype=int)
+    atom_types: Array1DStr = np.array(atom_types)
 
     return atom_types, to_remove
 
 
 def connectivity_from_coordinates(
-    symbols: Sequence[str], coordinates: Sequence[Sequence[float]], scale: float = 1.2
-) -> Sequence[Sequence[float]]:
+    symbols: Sequence[str], coordinates: ArrayLike2D, scale: float = 1.2
+) -> Array2DInt:
     """Returns connectivity matrix from coordinates based on sum of covalent radii.
 
     Args:
@@ -182,18 +196,20 @@ def connectivity_from_coordinates(
 
     # Get distance matrix and check distances below the sum of the two radii
     distance_matrix = scipy.spatial.distance_matrix(coordinates, coordinates)
-    connectivity_matrix = ((distance_matrix - radii_matrix) < 0) - np.eye(n_atoms)
+    connectivity_matrix: Array2DInt = ((distance_matrix - radii_matrix) < 0) - np.eye(
+        n_atoms
+    )
 
     return connectivity_matrix
 
 
 def determine_angles(  # noqa: C901
-    coordinates: Sequence[Sequence[float]],
-    connectivity_matrix: Sequence[Sequence[int]],
+    coordinates: ArrayLike2D,
+    connectivity_matrix: ArrayLike2D,
     mask: Sequence[int],
     linear_threshold: float = 0.9,
     method: str = "atan2",
-) -> Sequence[Sequence[float]]:
+) -> Array2DFloat:
     """Returns twist angle matrix based on dihedrals.
 
     Linear bonds are assessed by the dot product between the bond vectors. Method with
@@ -216,9 +232,11 @@ def determine_angles(  # noqa: C901
     """
     # Generate networkx graph
     G = nx.from_numpy_array(connectivity_matrix)
+    mask: Array1DBool = np.asarray(mask)
+    coordinates: Array2DFloat = np.asarray(coordinates)
 
     # Loop over all bonds
-    twist_angles = np.zeros(connectivity_matrix.shape)
+    twist_angles: Array2DFloat = np.zeros_like(connectivity_matrix)
     for edge in G.edges:
         i, j = edge
 
@@ -244,9 +262,9 @@ def determine_angles(  # noqa: C901
         # Determine the twist angle as the average over all combinations
         else:
             if method == "cos":
-                cosines = []
+                cosines: list[float] = []
             elif method == "atan2":
-                angles = []
+                angles: list[float] = []
             linear = False
 
             for k, l in combinations:
@@ -267,9 +285,10 @@ def determine_angles(  # noqa: C901
                     break
                 if method == "cos":
                     # Get normal vectors and determine dihedral angle
-                    n_i = np.cross(v_ik, v_ij)
-                    n_i /= np.linalg.norm(n_i)
-                    n_j = np.cross(v_jl, v_ji)
+                    # TODO: Remove type ignores when https://github.com/numpy/numpy/pull/21216 is released  # noqa: B950
+                    n_i: Array1DFloat = np.cross(v_ik, v_ij)
+                    n_i /= np.linalg.norm(n_i)  # type: ignore
+                    n_j: Array1DFloat = np.cross(v_jl, v_ji)
                     n_j /= np.linalg.norm(n_j)
 
                     cos = np.dot(n_i, n_j)
@@ -279,9 +298,9 @@ def determine_angles(  # noqa: C901
                     b_1 = -v_ik / np.linalg.norm(v_ik)
                     b_2 = v_ij / np.linalg.norm(v_ij)
                     b_3 = v_jl / np.linalg.norm(v_jl)
-                    n_1 = np.cross(b_1, b_2)
-                    n_2 = np.cross(b_2, b_3)
-                    m_1 = np.cross(n_1, b_2)
+                    n_1: Array1DFloat = np.cross(b_1, b_2)
+                    n_2: Array1DFloat = np.cross(b_2, b_3)  # type: ignore
+                    m_1: Array1DFloat = np.cross(n_1, b_2)
                     x = np.dot(n_1, n_2)
                     y = np.dot(m_1, n_2)
                     angle = np.arctan2(abs(y), abs(x))
@@ -312,7 +331,7 @@ def process_coordinates(
     remove_isolated: bool = True,
     generate_twist_angles: bool = True,
     radii_scale: float = 1.2,
-) -> Tuple[Sequence[str], Sequence[Sequence[int]], Sequence[bool]]:
+) -> tuple[InputData, Array1DBool]:
     """Returns atom types and connectivity matrix from coordinates.
 
     Args:
@@ -347,8 +366,10 @@ def process_coordinates(
 
 
 def _get_isolated_mask(
-    connectivity_matrix: Sequence[Sequence[int]], mask: Sequence[bool]
-) -> Sequence[bool]:
+    connectivity_matrix: ArrayLike2D, mask: ArrayLike1D
+) -> Array1DBool:
+    connectivity_matrix: Array2DInt = np.asarray(connectivity_matrix)
+    mask: Array1DBool = np.asarray(mask)
     to_remove = np.where(connectivity_matrix[:, mask].sum(axis=1) == 0)[0]
     mask[to_remove] = False
     return mask
@@ -356,12 +377,12 @@ def _get_isolated_mask(
 
 @requires_dependency([Import(module="rdkit", item="Chem")], globals())
 def process_rdkit_mol(
-    mol: "Chem.Mol",
-    coordinates: Sequence[Sequence[float]] = None,
+    mol: Chem.Mol,
+    coordinates: ArrayLike2D | None = None,
     remove_isolated: bool = True,
     generate_twist_angles: bool = True,
     coord_from_mol: bool = True,
-) -> Tuple[Sequence[str], Sequence[Sequence[int]], Sequence[bool]]:
+) -> tuple[InputData, Array1DBool]:
     """Returns atom types and connectivity matrix from RDKit Mol.
 
     Args:
@@ -400,14 +421,132 @@ def process_rdkit_mol(
     return input_data, mask
 
 
+@requires_dependency(
+    [
+        Import(module="rdkit", item="Chem"),
+        Import(module="rdkit.Chem", item="AllChem"),
+        Import(module="rdkit.Chem", item="rdCoordGen"),
+    ],
+    globals(),
+)
+def gen_coords_for_mol(
+    mol: Chem.Mol, bond_length: float = 1.4, coordgen: bool = True
+) -> Array2DFloat:
+    """Generates 2D coordinates for RDKit Mol and returns them.
+
+    Args:
+        mol: RDKit Mol object. Changed in the process
+        bond_length: Bond length
+        coordgen: Whether to use CoordGen or RDKit's default algorithm.
+
+    Returns:
+        coordinates: 2D coordinates (Å)
+
+    Warns:
+        If Mol has coordinates already
+    """
+    n_conformers = mol.GetNumConformers()
+    if n_conformers > 0:
+        warnings.warn(f"Mol already has coordinates: {n_conformers} conformers")
+    if coordgen is True:
+        ps = rdCoordGen.CoordGenParams()
+        ps.minimizerPrecision = ps.sketcherBestPrecision
+        rdCoordGen.AddCoords(mol, ps)
+        tm = np.zeros((4, 4))
+        for i in range(3):
+            tm[i, i] = bond_length
+        tm[3, 3] = 1.0
+        AllChem.TransformMol(mol, tm)
+    else:
+        AllChem.Compute2DCoords(mol, bondLength=bond_length)
+    coordinates = mol.GetConformer().GetPositions()
+
+    return coordinates
+
+
+@requires_dependency([Import(module="rdkit", item="Chem")], globals())
+def cycles_from_mol(mol: Chem.Mol) -> list[tuple[int, ...]]:
+    """Returns cycles from RDKit Mol object.
+
+    Args:
+        mol: RDKit Mol object
+
+    Returns:
+        cycles: Cycles
+    """
+    ri = mol.GetRingInfo()
+    G = nx.from_numpy_array(Chem.GetAdjacencyMatrix(mol))
+    cycles = [order_cycle(cycle, G) for cycle in ri.AtomRings()]
+
+    return cycles
+
+
+@requires_dependency([Import(module="rdkit", item="Chem")], globals())
+def mask_mol(mol: Chem.Mol, mask: ArrayLike1D) -> Chem.Mol:
+    """Returns RDKit Mol where atom with False indices in mask have been removed.
+
+    Args:
+        mol: RDKit Mol object
+        mask: Boolean mask
+
+    Returns:
+        masked_mol: Masked Mol object
+    """
+    mask: Array1DBool = np.asarray(mask)
+    rw_mol = Chem.RWMol(mol)
+    for i in reversed(np.where(~mask)[0]):
+        rw_mol.RemoveAtom(int(i))
+    masked_mol = rw_mol.GetMol()
+    Chem.SanitizeMol(
+        masked_mol,
+        Chem.SanitizeFlags.SANITIZE_ALL ^ Chem.SanitizeFlags.SANITIZE_KEKULIZE,
+    )
+    return masked_mol
+
+
+@requires_dependency(
+    [
+        Import(module="rdkit", item="Chem"),
+        Import(module="rdkit.Chem", item="AllChem"),
+    ],
+    globals(),
+)
+def scale_rdkit_mol(mol: Chem.Mol, bond_length: float = 1.4, n_dec: int = 3) -> None:
+    """Scales RDKit mol object to desired bond length.
+
+    Args:
+        mol: RDKit Mol object
+        bond_length: Desired bond length
+        n_dec: Number of decimals for equal bond length
+
+    Raises:
+        ValueError: When bond lengths are not the same
+    """
+    # Check if there is only one bond length
+    dm = Chem.Get3DDistanceMatrix(mol)
+    distances = [
+        dm[bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()] for bond in mol.GetBonds()
+    ]
+    unique_dists: Array1DFloat = np.unique(np.round(distances, n_dec))
+    if len(unique_dists) != 1:
+        raise ValueError("More than one unique distance. Cannot scale distances.")
+
+    # Scale bond lengths to desired value
+    tm = np.zeros((4, 4))
+    scale_factor = bond_length / unique_dists
+    np.fill_diagonal(tm, scale_factor)
+    tm[3, 3] = 1.0
+    AllChem.TransformMol(mol, tm)
+
+
 def generate_input_data(
     symbols: Sequence[str],
-    degrees: Sequence[int],
-    connectivity_matrix: Sequence[Sequence[int]],
-    coordinates: Sequence[Sequence[float]] = None,
+    degrees: Iterable[int],
+    connectivity_matrix: ArrayLike2D,
+    coordinates: ArrayLike2D | None = None,
     remove_isolated: bool = True,
     generate_twist_angles: bool = True,
-) -> Tuple[InputData, Sequence[bool]]:
+) -> tuple[InputData, Array1DBool]:
     """Generate input data for Hückel and PPP calculation.
 
     Args:
@@ -423,17 +562,20 @@ def generate_input_data(
         mask: Mask of which atoms were kept
     """
     n_atoms = len(symbols)
+    connectivity_matrix: Array2DInt = np.asarray(connectivity_matrix)
 
     atom_types, to_remove = assign_atom_types(symbols, degrees)
 
     # Set up mask to remove atoms without atom type and which are not conjugated
-    mask = np.ones(n_atoms, dtype=bool)
+    mask: Array1DBool = np.ones(n_atoms, dtype=bool)
     mask[to_remove] = False
     if remove_isolated:
         mask = _get_isolated_mask(connectivity_matrix, mask)
 
     # Generate twist angles if coordinates are given and prune out masked atoms
     if coordinates is not None:
+        coordinates = cast(Array2DFloat, coordinates)
+        coordinates = np.asarray(coordinates)
         if generate_twist_angles is True:
             twist_angles = determine_angles(coordinates, connectivity_matrix, mask)
             twist_angles = twist_angles[mask, :][:, mask]
