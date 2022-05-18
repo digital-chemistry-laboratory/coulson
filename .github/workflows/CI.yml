@@ -31,6 +31,7 @@ jobs:
       - name: Install Conda environment with Micromamba
         uses: mamba-org/provision-with-micromamba@main
         with:
+          channels: conda-forge
           extra-specs: |
             python=${{ matrix.python_version }}
       - name: Install dependencies
