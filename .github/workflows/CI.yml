@@ -34,6 +34,7 @@ jobs:
           channels: conda-forge
           extra-specs: |
             python=${{ matrix.python_version }}
+            mamba
       - name: Install dependencies
         shell: bash -l {0}
         run: |
