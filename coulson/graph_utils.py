@@ -130,7 +130,7 @@ def get_simple_cycles(
     else:
         G = graph
 
-    # For excluded rings, create simple cycles from reduced set of basis cycles
+    # For excluded cycles, create simple cycles from reduced set of basis cycles
     if excluded is not None:
         excluded = [frozenset(cycle) for cycle in excluded]
         cycle_basis = []

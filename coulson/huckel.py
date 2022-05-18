@@ -279,7 +279,6 @@ class HuckelCalculator:
 
 @dataclass
 class InputData:
-    # TODO rename to something better
     """Class for handling input to Hückel and PPP calculations."""
 
     atom_types: Sequence[str]

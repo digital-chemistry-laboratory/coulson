@@ -515,7 +515,7 @@ def test_sse_auto(sse_data):
             huckel_matrix,
             sum(electrons),
             coordinates,
-            target_cycle=indices,
+            ring=indices,
             cycle_basis=cycle_basis,
         )
         assert_almost_equal(sse, float(value["sse"]), decimal=4)

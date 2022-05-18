@@ -469,17 +469,17 @@ def calculate_sse(  # noqa: C901
     huckel_matrix: ArrayLike2D,
     n_electrons: int,
     coordinates: ArrayLike2D,
-    target_cycle: Iterable[int],
+    ring: Iterable[int],
     cycle_basis: Iterable[Iterable[int]] | None = None,
     multiplicity: int = 1,
 ) -> float:
-    """Calculates superaromatic stabilization energy for a cycle.
+    """Calculates superaromatic stabilization energy for a ring.
 
     Args:
         huckel_matrix: Hückel matrix
         n_electrons: Electrons per atom
         coordinates: Coordinates (Å)
-        target_cycle: Cycle to calculate SSE for
+        ring: Cycle to calculate SSE for
         cycle_basis: Cycle basis. Can be provided to save computational time if many
             cycles are computed
         multiplicity: Multiplicity
@@ -492,7 +492,7 @@ def calculate_sse(  # noqa: C901
     """
     huckel_matrix: Array2DFloat = np.asarray(huckel_matrix)
     coordinates: Array2DFloat = np.array(coordinates)
-    target_cycle = list(target_cycle)
+    ring = list(ring)
 
     # Create connectivity matrix and graph
     connectivity_matrix = np.zeros_like(huckel_matrix)
@@ -505,7 +505,7 @@ def calculate_sse(  # noqa: C901
         cycle_basis = minimum_cycle_basis(G)
 
     # Do connected components analysis and consider only cycles from current component
-    indices = list(nx.node_connected_component(G, target_cycle[0]))
+    indices = list(nx.node_connected_component(G, ring[0]))
     polygon_cycles = [
         cycle for cycle in cycle_basis if len(set(cycle).intersection(indices)) > 0
     ]
@@ -530,9 +530,7 @@ def calculate_sse(  # noqa: C901
     max_pairs = set(
         frozenset(pair) for pair in nx.utils.pairwise(max_cycle, cyclic=True)
     )
-    target_pairs = set(
-        frozenset(pair) for pair in nx.utils.pairwise(target_cycle, cyclic=True)
-    )
+    target_pairs = set(frozenset(pair) for pair in nx.utils.pairwise(ring, cyclic=True))
     intersecting_pairs = max_pairs.intersection(target_pairs)
 
     if len(intersecting_pairs) > 0:
@@ -541,7 +539,7 @@ def calculate_sse(  # noqa: C901
         # Determine shortest path from target to boundary
         shortest_paths = [
             nx.shortest_path(G, source, target)
-            for source, target in itertools.product(target_cycle, max_cycle)
+            for source, target in itertools.product(ring, max_cycle)
         ]
         shortest_path = sorted(shortest_paths, key=lambda x: len(x))[0][::-1]
 
@@ -551,7 +549,7 @@ def calculate_sse(  # noqa: C901
         last_cycle = None
         if len(shortest_path) == 2:
             for cycle in polygon_cycles:
-                intersection_target = set(target_cycle).intersection(cycle)
+                intersection_target = set(ring).intersection(cycle)
                 intersection_max = set(max_cycle).intersection(cycle)
                 intersection_path = set(shortest_path).intersection(cycle)
                 if (
