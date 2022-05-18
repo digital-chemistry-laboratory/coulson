@@ -3,29 +3,25 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from dataclasses import dataclass
 import itertools
 import math
-import typing
 
 import networkx as nx
 import numpy as np
-from scipy.sparse import csr_matrix
-from scipy.sparse.csgraph import connected_components
+from shapely.geometry import Polygon
+from shapely.ops import unary_union
 
+from coulson.graph_utils import get_simple_cycles, minimum_cycle_basis, order_cycle
 from coulson.typing import (
     Array1DFloat,
     Array1DInt,
     Array2DFloat,
-    Array2DInt,
     ArrayLike1D,
     ArrayLike2D,
 )
-from coulson.utils import Import, occupations_from_multiplicity, requires_dependency
-
-if typing.TYPE_CHECKING:  # pragma: no cover
-    from shapely import Polygon  # pragma: no cover
+from coulson.utils import occupations_from_multiplicity
 
 
 @dataclass
@@ -42,15 +38,17 @@ class Circuit:
 
 def calculate_bre(
     huckel_matrix: ArrayLike2D,
-    occupations: ArrayLike1D,
+    n_electrons: int,
     indices: Iterable[Iterable[int]],
+    multiplicity: int = 1,
 ) -> float:
     """Calculate bond resonance energy according to recipe of Aihara.
 
     Args:
         huckel_matrix: Hückel matrix
-        occupations: Orbital occupations
+        n_electrons: Number of electrons
         indices: Tuples of atom indices
+        multiplicity: Multiplicity
 
     Returns:
         bre: Bond resonance energy
@@ -59,7 +57,8 @@ def calculate_bre(
         ValueError: If matrix elements are zero
     """
     huckel_matrix: Array2DFloat = np.array(huckel_matrix)
-    occupations: Array1DFloat = np.asarray(occupations)
+    n_orbitals = len(huckel_matrix)
+    occupations = occupations_from_multiplicity(n_electrons, n_orbitals, multiplicity)
 
     # Check if connected or not
     for i, j in indices:
@@ -117,11 +116,11 @@ def calculate_tre(
     return tre, p_tre
 
 
-def n_neighbors_edge(g: nx.Graph, edge: tuple[int, int]) -> int:
+def n_neighbors_edge(G: nx.Graph, edge: tuple[int, int]) -> int:
     """Returns the number of neighbors for the two nodes connected by an edge.
 
     Args:
-        g: Graph
+        G: Graph
         edge: Edge indices
 
     Returns:
@@ -129,26 +128,26 @@ def n_neighbors_edge(g: nx.Graph, edge: tuple[int, int]) -> int:
     """
     n_neighbors = 0
     for i in edge:
-        neighbors = set(g.neighbors(i))
+        neighbors = set(G.neighbors(i))
         neighbors.discard(i)
         n_neighbors += len(neighbors) - 1
     return n_neighbors
 
 
-def matching_polynomial(g: nx.Graph) -> np.polynomial.Polynomial:
+def matching_polynomial(G: nx.Graph) -> np.polynomial.Polynomial:
     """Calculate the matching polynomial of a graph.
 
     Uses the algorithm of J. Am. Chem. Soc. 1977, 99 (6), 1692-1704
 
     Args:
-        g: Graph
+        G: Graph
 
     Returns:
         mp: Matching polynomial
     """
     # TODO: Create dictionary of fragments to avoid calculating multiple times
     # Instantiate initial list of graphs with a factor of one
-    graphs = [(g, 1)]
+    graphs = [(G, 1)]
 
     # Cut graph into linear pieces and evaluate their matching polynomials
     mp = np.polynomial.Polynomial(0)  # type: ignore
@@ -266,67 +265,6 @@ def poly_div_deriv(  # noqa: C901
     return ans
 
 
-def cycle_edges_from_basis(
-    cycle_basis: Iterable[Iterable[int]],
-) -> tuple[tuple[tuple[int, int], ...], ...]:
-    """Calculates simple cycles from given cycle basis.
-
-    Uses algorithm from J. Chem. Inf. Comput. Sci. 1975, 15 (3), 140-147, 10.1021/ci60003a003.
-
-    Args:
-        cycle_basis: Cycles in basis
-
-    Returns:
-        simple_cycles: Cycles derived from basis
-    """
-    cycle_basis = [
-        frozenset(frozenset(pair) for pair in nx.utils.pairwise(cycle, cyclic=True))
-        for cycle in cycle_basis
-    ]
-    simple_cycles: set[frozenset[frozenset[int]]] = set()
-    all_cycles: set[frozenset[frozenset[int]]] = set()
-
-    for base_cycle in cycle_basis:
-        new_simple_cycles: set[frozenset[frozenset[int]]] = set()
-        new_all_cycles: set[frozenset[frozenset[int]]] = set()
-
-        # Create combinations with previously created cycles
-        for old_cycle in all_cycles:
-            new_cycle = old_cycle.symmetric_difference(base_cycle)
-            new_all_cycles.add(new_cycle)
-
-            # If there is no intersection, cycle is disconnected and not simple
-            if len(old_cycle.intersection(base_cycle)) == 0:
-                continue
-
-            # Prune out cycles
-            rm_simple_cycles = set()
-            for check_cycle in new_simple_cycles:
-                if new_cycle < check_cycle:  # Proper subset
-                    rm_simple_cycles.add(check_cycle)
-                if check_cycle < new_cycle:  # Proper subset
-                    rm_simple_cycles.add(new_cycle)
-                    break
-            new_simple_cycles.add(new_cycle)
-            new_simple_cycles.difference_update(rm_simple_cycles)
-        simple_cycles.update(new_simple_cycles)
-        all_cycles.update(new_all_cycles)
-        all_cycles.add(base_cycle)
-        simple_cycles.add(base_cycle)
-    simple_cycles = tuple(
-        tuple(tuple(pair) for pair in cycle) for cycle in simple_cycles
-    )
-    simple_cycles = typing.cast(tuple[tuple[tuple[int, int], ...], ...], simple_cycles)
-
-    return simple_cycles
-
-
-@requires_dependency(
-    [
-        Import(module="shapely.geometry", item="Polygon"),
-    ],
-    globals(),
-)
 def calculate_circuits(
     cycles: Iterable[Iterable[int]],
     huckel_matrix: ArrayLike2D,
@@ -367,12 +305,14 @@ def calculate_circuits(
     )
     non_one = unique[unique != 1]
     if len(non_one) > 0:
-        raise ValueError(f"Open shell layers with occupations: {non_one}")
+        raise ValueError(
+            f"Open shell layers with occupations different from one not supported: {non_one}"
+        )
     if len(unique) > 0:
         n_unpaired = counts[0] * degeneracies[mask][indices[0]]
         if n_unpaired + 1 != multiplicity:
             raise ValueError(
-                f"Number of unpaired electrons does {n_unpaired} not match "
+                f"Number of unpaired electrons {n_unpaired} does not match "
                 f"multiplicity {multiplicity}. Open-shell calculation not supported."
             )
 
@@ -448,53 +388,6 @@ def calculate_circuits(
     return circuits
 
 
-def minimum_cycle_basis(
-    connectivity_matrix: ArrayLike2D,
-) -> tuple[tuple[int, ...], ...]:
-    """Calculate minimum cycle basis from graph.
-
-    Does not return cycles of length one for graphs with one-node loops.
-
-    Args:
-        connectivity_matrix: Connectivity matrix
-
-    Returns:
-        cycle_basis: Cycle basis
-    """
-    connectivity_matrix: Array2DInt = np.asarray(connectivity_matrix)
-    g = nx.from_numpy_array(connectivity_matrix)
-
-    cycle_basis = tuple(
-        tuple(cycle) for cycle in nx.minimum_cycle_basis(g) if len(cycle) > 1
-    )
-    return cycle_basis
-
-
-def is_disconnected(edges: Iterable[Iterable[int]]) -> bool:
-    """Check whether edges form disconnected components.
-
-    Args:
-        edges: Edges of graph
-
-    Returns:
-        disconnected: Whether components are disconnected.
-    """
-    # Create connectivity matrix from edges
-    size = max(itertools.chain.from_iterable(edges)) + 1
-    cm = np.zeros((size, size))
-    for i, j in edges:
-        cm[i, j] = cm[j, i] = 1
-    mask = cm.any(axis=0)
-    cm = cm[:, mask][mask, :]
-
-    # Calculate number of connected components
-    n: int
-    n, _ = connected_components(csgraph=csr_matrix(cm), directed=False)
-    disconnected = n > 1
-
-    return disconnected
-
-
 def bond_analysis(
     circuits: Iterable[Circuit],
 ) -> tuple[dict[tuple[int, int], float], dict[frozenset[int], float]]:
@@ -561,7 +454,7 @@ def calculate_m_sse(
     mre_tot, _ = global_analysis(circuits)
 
     # Calculate reduced MRE
-    reduced_cycles = cycles_from_connectivity(connectivity_matrix, excluded=excluded)
+    reduced_cycles = get_simple_cycles(connectivity_matrix, excluded=excluded)
     reduced_circuits = [
         circuit for circuit in circuits if circuit.indices in reduced_cycles
     ]
@@ -572,99 +465,182 @@ def calculate_m_sse(
     return m_sse
 
 
-def edges_to_cycle(edges: Iterable[Iterable[int]]) -> tuple[int, ...]:
-    """Converts unordered sequeunce of cycle edges to ordered sequence of nodes.
+def calculate_sse(  # noqa: C901
+    huckel_matrix: ArrayLike2D,
+    n_electrons: int,
+    coordinates: ArrayLike2D,
+    target_cycle: Iterable[int],
+    cycle_basis: Iterable[Iterable[int]] | None = None,
+    multiplicity: int = 1,
+) -> float:
+    """Calculates superaromatic stabilization energy for a cycle.
 
     Args:
-        edges: Unordered sequence of edges
+        huckel_matrix: Hückel matrix
+        n_electrons: Electrons per atom
+        coordinates: Coordinates (Å)
+        target_cycle: Cycle to calculate SSE for
+        cycle_basis: Cycle basis. Can be provided to save computational time if many
+            cycles are computed
+        multiplicity: Multiplicity
 
     Returns:
-        cycle: Ordered sequence of nodes
+        sse: SSE value
 
     Raises:
-        ValueError: If wrong number of cycles found
+        ValueError: If cycle_path not found
     """
-    # Create connectivity matrix
-    G = nx.from_edgelist(edges)
-    cycles = get_simple_cycles(G)
-    if len(cycles) == 0:
-        raise ValueError("No cycle found.")
-    elif len(cycles) > 1:
-        raise ValueError(f"One cycle expected, {len(cycles)} found.")
-    cycle = tuple(cycles[0])
+    huckel_matrix: Array2DFloat = np.asarray(huckel_matrix)
+    coordinates: Array2DFloat = np.array(coordinates)
+    target_cycle = list(target_cycle)
 
-    return cycle
+    # Create connectivity matrix and graph
+    connectivity_matrix = np.zeros_like(huckel_matrix)
+    connectivity_matrix[huckel_matrix.nonzero()] = 1
+    np.fill_diagonal(connectivity_matrix, 0)
+    G = nx.from_numpy_array(connectivity_matrix)
 
+    # Calculate cycle basis if needed
+    if cycle_basis is None:
+        cycle_basis = minimum_cycle_basis(G)
 
-def get_simple_cycles(G: nx.Graph) -> tuple[tuple[int, ...], ...]:
-    """Get simple cycles excluding those with size below 2.
+    # Do connected components analysis and consider only cycles from current component
+    indices = list(nx.node_connected_component(G, target_cycle[0]))
+    polygon_cycles = [
+        cycle for cycle in cycle_basis if len(set(cycle).intersection(indices)) > 0
+    ]
 
-    Args:
-        G: NetworkX graph object
+    # Build up maximum polygon and take out the cycle indices
+    polygons = []
+    for cycle in polygon_cycles:
+        indices = list(cycle)
+        coords = coordinates[indices]
+        polygon = Polygon(coords)
+        polygons.append(polygon)
 
-    Returns:
-        simple_cycles: Simple cycles
-    """
-    already_seen = set()
-    simple_cycles: list[Sequence[int]] = []
-    cycle: Sequence[int]
-    for cycle in list(nx.simple_cycles(G.to_directed())):
-        if len(cycle) > 2:
-            if frozenset(cycle) not in already_seen:
-                simple_cycles.append(cycle)
-                already_seen.add(frozenset(cycle))
-    simple_cycles.sort(key=len)
-    simple_cycles = tuple(tuple(cycle) for cycle in simple_cycles)
+    max_polygon = unary_union(polygons)
+    max_cycle_unordered = np.where(
+        (coordinates[:, None] == max_polygon.boundary.coords).all(axis=-1).any(axis=-1)
+    )[0]
+    max_cycle = order_cycle(max_cycle_unordered, G)
 
-    return simple_cycles
+    # Find intersection with target cycle and max cycle
+    # - If two consecutive atoms on the perimeter, cycle already on the perimeter
+    # - Otherwise, build path of cycles to perimeter
+    max_pairs = set(
+        frozenset(pair) for pair in nx.utils.pairwise(max_cycle, cyclic=True)
+    )
+    target_pairs = set(
+        frozenset(pair) for pair in nx.utils.pairwise(target_cycle, cyclic=True)
+    )
+    intersecting_pairs = max_pairs.intersection(target_pairs)
 
-
-def cycles_from_connectivity(
-    connectivity_matrix: ArrayLike2D,
-    excluded: Iterable[Iterable[int]] | None = None,
-) -> tuple[tuple[int, ...], ...]:
-    """Get cycles with potential exclusion of base cycles.
-
-    Args:
-        connectivity_matrix: Connectivity matrix
-        excluded: Cycles to exclude from cycle basis
-
-    Returns:
-        cycles: Cycles
-
-    Raises:
-        ValueError: If excluded cycle not in basis
-    """
-    # Get all simple cycles
-    G = nx.convert_matrix.from_numpy_array(connectivity_matrix)
-    simple_cycles = get_simple_cycles(G)
-
-    # Loop over rings and keep unique ones
-
-    if excluded is not None:
-        excluded = [frozenset(cycle) for cycle in excluded]
-        ref_cycles = {frozenset(cycle): cycle for cycle in simple_cycles}
-        cycle_basis = []
-        excluded_cycles = []
-        for cycle in minimum_cycle_basis(connectivity_matrix):
-            if frozenset(cycle) in excluded:
-                excluded_cycles.append(frozenset(cycle))
-            else:
-                cycle_basis.append(ref_cycles[frozenset(cycle)])
-        if len(excluded_cycles) != len(excluded):
-            raise ValueError(
-                f"Excluded cycle not in cycle basis: {set(excluded).difference(excluded_cycles)}"
-            )
-
-        # Prune out disconnected cycles
-        cycles = cycle_edges_from_basis(cycle_basis)
-        cycles = tuple(cycle for cycle in cycles if is_disconnected(cycle) is False)
-        cycles = tuple(
-            ref_cycles.get(frozenset(itertools.chain.from_iterable(cycle)))
-            for cycle in cycles
-        )
-        cycles = tuple(cycle for cycle in cycles if cycle is not None)
+    if len(intersecting_pairs) > 0:
+        i_indices = [tuple(list(intersecting_pairs)[0])]
     else:
-        cycles = simple_cycles
+        # Determine shortest path from target to boundary
+        shortest_paths = [
+            nx.shortest_path(G, source, target)
+            for source, target in itertools.product(target_cycle, max_cycle)
+        ]
+        shortest_path = sorted(shortest_paths, key=lambda x: len(x))[0][::-1]
 
-    return cycles
+        # 4. Shortest path of length 4 or greater -> Special algorithm
+        # Determine a cycle that border so both boundary and target along shortest path
+        first_cycle = None
+        last_cycle = None
+        if len(shortest_path) == 2:
+            for cycle in polygon_cycles:
+                intersection_target = set(target_cycle).intersection(cycle)
+                intersection_max = set(max_cycle).intersection(cycle)
+                intersection_path = set(shortest_path).intersection(cycle)
+                if (
+                    len(intersection_target) >= 2
+                    and len(intersection_max) >= 2
+                    and len(intersection_path) == 2
+                ):
+                    first_cycle = cycle
+                    last_cycle = cycle
+                    break
+        # Determine first and last cycles from path
+        else:
+            for cycle in polygon_cycles:
+                if len(set(cycle).intersection(shortest_path[:3])) == 3:
+                    first_cycle = cycle
+                if len(set(cycle).intersection(shortest_path[-3:])) == 3:
+                    last_cycle = cycle
+                if first_cycle is not None and last_cycle is not None:
+                    break
+        if first_cycle is None:
+            raise ValueError("Could not find first cycle along path.")
+        if last_cycle is None:
+            raise ValueError("Could not find last cycle along path.")
+
+        # Complete bond path with info from first and last cycle
+        bond_path = list(shortest_path)
+        pairs = nx.utils.pairwise(first_cycle, cyclic=True)
+        for pair in pairs:
+            if shortest_path[0] in pair and shortest_path[1] not in pair:
+                first_pair = list(pair)
+                first_pair.remove(shortest_path[0])
+                idx_first = first_pair[0]
+        pairs = nx.utils.pairwise(last_cycle, cyclic=True)
+
+        for pair in pairs:
+            if shortest_path[-1] in pair and shortest_path[-2] not in pair:
+                last_pair = list(pair)
+                last_pair.remove(shortest_path[-1])
+                idx_last = last_pair[0]
+        bond_path.insert(0, idx_first)
+        bond_path.append(idx_last)
+
+        # Search over quadruplets of atom indices to find cycle path
+        cycles_path = [first_cycle]
+        quadruplets = [bond_path[i : i + 4] for i in range(2, len(bond_path) - 4, 2)]
+        previous = first_cycle
+        for quadruplet in quadruplets:
+            cycle = [
+                cycle
+                for cycle in polygon_cycles
+                if len(set(cycle).intersection(quadruplet)) >= 3
+                and len(set(cycle).intersection(previous)) >= 2
+            ][0]
+            previous = quadruplet
+            cycles_path.append(cycle)
+        if last_cycle not in cycles_path:
+            cycles_path.append(last_cycle)
+
+        # Take out indices of the cycles intersections along the path
+        previous = None
+        intersections = [
+            tuple(set(cycle_pair[0]).intersection(cycle_pair[1]))
+            for cycle_pair in nx.utils.pairwise(cycles_path)
+        ]
+        path_indices = [tuple(bond_path[:2])] + intersections + [tuple(bond_path[-2:])]
+
+        # Construct the ordered set of bond indices for calculation of SSE
+        cycle_pairs = list(nx.utils.pairwise(cycles_path[0], cyclic=True))
+        pair_sets = [frozenset(pair) for pair in cycle_pairs]
+        i, j = cycle_pairs[pair_sets.index(frozenset(path_indices[0]))]
+
+        # Set the direction of first bond arbitrarily
+        pairs = list(nx.utils.pairwise(path_indices))
+        i_indices = [(i, j)]
+        previous = j, i
+        for cycle, ((i, j), (k, l)) in zip(cycles_path, pairs):
+            # Determine orientation of each new bond to be opposite to the previous
+            cycle_pairs = list(nx.utils.pairwise(cycle, cyclic=True))
+            pair_sets = [frozenset(pair) for pair in cycle_pairs]
+            i, j = cycle_pairs[pair_sets.index(frozenset((i, j)))]
+            k, l = cycle_pairs[pair_sets.index(frozenset((k, l)))]
+            # Check for different cw/ccw orientation of this ring compared to previous
+            if previous == (i, j):
+                k, l = l, k
+            i_indices.append((l, k))
+            previous = k, l
+
+    sse = calculate_bre(
+        huckel_matrix, n_electrons, indices=i_indices, multiplicity=multiplicity
+    )
+
+    return sse

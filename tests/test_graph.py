@@ -6,22 +6,25 @@ import csv
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 from numpy.testing import assert_almost_equal
 import pytest
 from rdkit import Chem
 
-from coulson.graph import (
+from coulson.graph_aromaticity import (
     bond_analysis,
     calculate_bre,
     calculate_circuits,
+    calculate_sse,
     calculate_tre,
-    cycles_from_connectivity,
     global_analysis,
 )
+from coulson.graph_utils import get_simple_cycles, minimum_cycle_basis
 from coulson.huckel import HuckelCalculator, prepare_huckel_matrix
-from coulson.interface import coords_2D_from_rdkit, process_rdkit_mol, scale_rdkit_mol
-from coulson.typing import Array1DFloat
+from coulson.interface import (
+    gen_coords_for_mol,
+    process_rdkit_mol,
+    scale_rdkit_mol,
+)
 
 DATA_DIR = Path(__file__).parent / "data" / "graph"
 
@@ -191,9 +194,9 @@ def test_mre_pah(pah_data):
     )
 
     huckel = HuckelCalculator(huckel_matrix, electrons)
-    coordinates = coords_2D_from_rdkit(mol, coordgen=True)
+    coordinates = gen_coords_for_mol(mol, coordgen=True)
 
-    cycles = cycles_from_connectivity(input_data.connectivity_matrix)
+    cycles = get_simple_cycles(input_data.connectivity_matrix)
     circuits = calculate_circuits(
         cycles,
         huckel_matrix,
@@ -217,9 +220,9 @@ def test_mre_pah_charged(pah_charged_data):
     )
 
     huckel = HuckelCalculator(huckel_matrix, electrons, charge=int(data["charge"]))
-    coordinates = coords_2D_from_rdkit(mol, coordgen=True)
+    coordinates = gen_coords_for_mol(mol, coordgen=True)
 
-    cycles = cycles_from_connectivity(input_data.connectivity_matrix)
+    cycles = get_simple_cycles(input_data.connectivity_matrix)
     if data["name"] in ["Benzene", "Triphenylene", "Coronene"]:
         with pytest.raises(ValueError, match=r"^Number of unpaired"):
             circuits = calculate_circuits(
@@ -262,9 +265,9 @@ def test_mre_hetero(hetero_data):
         scale_rdkit_mol(mol, bond_length=1.4)
         coordinates = mol.GetConformer().GetPositions()
     else:
-        coordinates = coords_2D_from_rdkit(mol, coordgen=True)
+        coordinates = gen_coords_for_mol(mol, coordgen=True)
 
-    cycles = cycles_from_connectivity(input_data.connectivity_matrix)
+    cycles = get_simple_cycles(input_data.connectivity_matrix)
     circuits = calculate_circuits(
         cycles,
         huckel_matrix,
@@ -288,9 +291,9 @@ def test_susc_pah(pah_data):
     )
 
     huckel = HuckelCalculator(huckel_matrix, electrons)
-    coordinates = coords_2D_from_rdkit(mol, coordgen=True)
+    coordinates = gen_coords_for_mol(mol, coordgen=True)
 
-    cycles = cycles_from_connectivity(input_data.connectivity_matrix)
+    cycles = get_simple_cycles(input_data.connectivity_matrix)
     circuits = calculate_circuits(
         cycles,
         huckel_matrix,
@@ -313,11 +316,10 @@ def test_t_bre(bre_data):
     huckel_matrix, electrons = prepare_huckel_matrix(
         input_data.atom_types, input_data.connectivity_matrix
     )
-    huckel = HuckelCalculator(huckel_matrix, electrons, charge=int(data["charge"]))
     for value in values:
         t_bre = calculate_bre(
             huckel_matrix,
-            huckel.occupations,
+            sum(electrons) - int(data["charge"]),
             indices=[(int(value["idx_1"]) - 1, int(value["idx_2"]) - 1)],
         )
         assert_almost_equal(t_bre, float(value["t-bre"]), decimal=3)
@@ -332,22 +334,11 @@ def test_t_bre_charged(bre_charged_data):
     huckel_matrix, electrons = prepare_huckel_matrix(
         input_data.atom_types, input_data.connectivity_matrix
     )
-    huckel = HuckelCalculator(huckel_matrix, electrons, charge=int(data["charge"]))
 
-    # Set occupations to closed-shell for open-shell species
-    occupations: Array1DFloat
-    if data["name"] in ["Benzene", "Triphenylene", "Coronene"]:
-        occupations = np.array(
-            [2] * int(len(huckel_matrix) / 2 - 1)
-            + [0] * int(len(huckel_matrix) / 2 + 1),
-            dtype=float,
-        )
-    else:
-        occupations = huckel.occupations
     for value in values:
         t_bre = calculate_bre(
             huckel_matrix,
-            occupations,
+            sum(electrons) - int(data["charge"]),
             indices=[(int(value["idx_1"]) - 1, int(value["idx_2"]) - 1)],
         )
         assert_almost_equal(t_bre, float(value["t-bre"]), decimal=3)
@@ -358,12 +349,12 @@ def test_m_bre(bre_data):
     data = bre_data
     values = data["values"]
     mol = Chem.MolFromSmiles(data["smiles"])
-    coordinates = coords_2D_from_rdkit(mol, coordgen=True)
+    coordinates = gen_coords_for_mol(mol, coordgen=True)
     input_data, _ = process_rdkit_mol(mol)
     huckel_matrix, electrons = prepare_huckel_matrix(
         input_data.atom_types, input_data.connectivity_matrix
     )
-    cycles = cycles_from_connectivity(input_data.connectivity_matrix)
+    cycles = get_simple_cycles(input_data.connectivity_matrix)
     huckel = HuckelCalculator(
         huckel_matrix, electrons, charge=int(data["charge"]), multiplicity=1
     )
@@ -388,12 +379,12 @@ def test_m_bre_charged(bre_charged_data):
     data = bre_charged_data
     values = data["values"]
     mol = Chem.MolFromSmiles(data["smiles"])
-    coordinates = coords_2D_from_rdkit(mol, coordgen=True)
+    coordinates = gen_coords_for_mol(mol, coordgen=True)
     input_data, _ = process_rdkit_mol(mol)
     huckel_matrix, electrons = prepare_huckel_matrix(
         input_data.atom_types, input_data.connectivity_matrix
     )
-    cycles = cycles_from_connectivity(input_data.connectivity_matrix)
+    cycles = get_simple_cycles(input_data.connectivity_matrix)
     huckel = HuckelCalculator(
         huckel_matrix, electrons, charge=int(data["charge"]), multiplicity=1
     )
@@ -432,12 +423,12 @@ def test_bond_currents(bc_data):
     data = bc_data
     values = data["values"]
     mol = Chem.MolFromSmiles(data["smiles"])
-    coordinates = coords_2D_from_rdkit(mol, coordgen=True)
+    coordinates = gen_coords_for_mol(mol, coordgen=True)
     input_data, _ = process_rdkit_mol(mol)
     huckel_matrix, electrons = prepare_huckel_matrix(
         input_data.atom_types, input_data.connectivity_matrix
     )
-    cycles = cycles_from_connectivity(input_data.connectivity_matrix)
+    cycles = get_simple_cycles(input_data.connectivity_matrix)
     huckel = HuckelCalculator(
         huckel_matrix, electrons, charge=int(data["charge"]), multiplicity=1
     )
@@ -464,12 +455,12 @@ def test_cycle_currents(cc_data):
     data = cc_data
     values = data["values"]
     mol = Chem.MolFromSmiles(data["smiles"])
-    coordinates = coords_2D_from_rdkit(mol, coordgen=True)
+    coordinates = gen_coords_for_mol(mol, coordgen=True)
     input_data, _ = process_rdkit_mol(mol)
     huckel_matrix, electrons = prepare_huckel_matrix(
         input_data.atom_types, input_data.connectivity_matrix
     )
-    cycles = cycles_from_connectivity(input_data.connectivity_matrix)
+    cycles = get_simple_cycles(input_data.connectivity_matrix)
     huckel = HuckelCalculator(
         huckel_matrix, electrons, charge=int(data["charge"]), multiplicity=1
     )
@@ -491,7 +482,7 @@ def test_cycle_currents(cc_data):
         assert_almost_equal(I, float(value["current"]), decimal=3)
 
 
-def test_sse(sse_data):
+def test_sse_manual(sse_data):
     """Test SSE."""
     data = sse_data
     values = data["values"]
@@ -500,9 +491,31 @@ def test_sse(sse_data):
     huckel_matrix, electrons = prepare_huckel_matrix(
         input_data.atom_types, input_data.connectivity_matrix
     )
-    huckel = HuckelCalculator(huckel_matrix, electrons, charge=int(data["charge"]))
     for value in values:
         i_indices = [int(i) - 1 for i in value["i_indices"].split(",")]
         pairs = list(zip(*[iter(i_indices)] * 2))
-        sse = calculate_bre(huckel_matrix, huckel.occupations, indices=pairs)
+        sse = calculate_bre(huckel_matrix, sum(electrons), indices=pairs)
+        assert_almost_equal(sse, float(value["sse"]), decimal=4)
+
+
+def test_sse_auto(sse_data):
+    """Test SSE."""
+    data = sse_data
+    values = data["values"]
+    mol = Chem.MolFromSmiles(data["smiles"])
+    coordinates = gen_coords_for_mol(mol, coordgen=True)
+    input_data, _ = process_rdkit_mol(mol)
+    huckel_matrix, electrons = prepare_huckel_matrix(
+        input_data.atom_types, input_data.connectivity_matrix
+    )
+    cycle_basis = minimum_cycle_basis(input_data.connectivity_matrix)
+    for value in values:
+        indices = [int(i) - 1 for i in value["indices"].split(",")]
+        sse = calculate_sse(
+            huckel_matrix,
+            sum(electrons),
+            coordinates,
+            target_cycle=indices,
+            cycle_basis=cycle_basis,
+        )
         assert_almost_equal(sse, float(value["sse"]), decimal=4)

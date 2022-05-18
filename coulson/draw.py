@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+import io
 import typing
+from typing import BinaryIO, Sequence
 
 import networkx as nx
 import numpy as np
 
-from coulson.graph import Circuit
-from coulson.interface import coords_2D_from_rdkit
+from coulson.graph_aromaticity import Circuit
+from coulson.interface import gen_coords_for_mol
 from coulson.typing import (
+    Array1DAny,
     Array1DFloat,
     Array1DInt,
     Array2DFloat,
@@ -202,7 +205,7 @@ def draw_mol(  # noqa: C901
 
     # Generate 2D coordinates
     if mol.GetNumConformers() == 0:
-        _ = coords_2D_from_rdkit(mol)
+        _ = gen_coords_for_mol(mol)
 
     # Create drawing object according to image format
     if img_format == "png":
@@ -214,10 +217,6 @@ def draw_mol(  # noqa: C901
             f"Image format {img_format} not supported. Choose 'svg' or 'png'."
         )
     d2d = draw_method(*size)
-
-    # Draw properties with similarity map
-    if properties is not None:
-        SimilarityMaps.GetSimilarityMapFromWeights(mol, list(properties), draw2d=d2d)
 
     # Add atom and bond indices
     if atom_numbers is True:
@@ -243,16 +242,26 @@ def draw_mol(  # noqa: C901
             conformer = rw_mol.GetConformer()
             conformer.SetAtomPosition(idx, point)
         mol = rw_mol.GetMol()
+        Chem.SanitizeMol(
+            mol, Chem.SanitizeFlags.SANITIZE_ALL ^ Chem.SanitizeFlags.SANITIZE_KEKULIZE
+        )
 
     # Draw mol
     if mol_label is None:
         mol_label = ""
-    d2d.DrawMolecule(
-        mol,
-        legend=mol_label,
-        highlightAtoms=highlighted_atoms,
-        highlightBonds=highlighted_bonds,
-    )
+        Chem.Draw.PrepareAndDrawMolecule(
+            d2d,
+            # d2d.DrawMolecule(
+            mol,
+            legend=mol_label,
+            highlightAtoms=highlighted_atoms,
+            highlightBonds=highlighted_bonds,
+            kekulize=False,
+        )
+
+    # Draw properties with similarity map
+    if properties is not None:
+        SimilarityMaps.GetSimilarityMapFromWeights(mol, list(properties), draw2d=d2d)
 
     # Draw circles
     if circle_values is not None and rings is not None:
@@ -300,7 +309,8 @@ def draw_bond_currents(
         marker_size: Marker size
 
     Returns:
-        fig, ax: Matplotlib F
+        fig: Matplotlib Figure object
+        ax: Matplotlib Axes objects
     """
     coordinates: Array2DFloat = np.asarray(coordinates)
     fig, ax = plt.subplots(figsize=figsize)
@@ -353,7 +363,7 @@ def draw_circuit_currents(
         marker_size: Marker size
 
     Returns:
-        plots: Plots
+        plots: Plots as tuples of Figure and Axes
     """
     coordinates: Array2DFloat = np.asarray(coordinates)
 
@@ -385,4 +395,60 @@ def draw_circuit_currents(
         ax.scatter(coordinates[:, 0], coordinates[:, 1], color="C0", s=marker_size)
         plt.close()
         plots.append((fig, ax))
+
     return plots
+
+
+def fig_to_bytesio(fig: plt.Figure) -> io.BytesIO:
+    """Converts plt.Figure into io.BytesIO.
+
+    Args:
+        fig: Matplotlib Figure object
+
+    Returns:
+        bytes_io: BytesIO object for figure
+    """
+    bytes_io = io.BytesIO()
+    fig.savefig(bytes_io, format="png")
+    bytes_io.seek(0)
+
+    return bytes_io
+
+
+def draw_png_grid(
+    images: Sequence[BinaryIO],
+    n_columns: int = 5,
+    figsize: tuple[float, float] = (18, 6),
+    labels: Iterable[str] | None = None,
+) -> tuple[plt.Figure, Array1DAny]:
+    """Plot images in grid.
+
+    Args:
+        images: PNG images as bytes data, e.g., io.BytesIO
+        n_columns: Number of columns
+        figsize: Figure size
+        labels: Labels for each subplot
+
+    Returns:
+        fig: Matplotlib Figure object
+        ax: Matplotlib Axes objects
+    """
+    # Determine number of rows and columns
+    n_images = len(images)
+    n_columns = min([n_images, n_columns])
+    n_rows = n_images // n_columns + np.clip(n_images % n_columns, 0, 1)
+
+    # Create figure
+    fig, axes = plt.subplots(n_rows, n_columns, figsize=figsize)
+    axes: Array1DAny = np.asarray(axes)
+    if labels is None:
+        labels = [""] * n_images
+    for i, (img, label) in enumerate(zip(images, labels)):
+        image = plt.imread(img)
+        ax = axes.flatten()[i]
+        ax.axis("off")
+        ax.imshow(image)
+        ax.set_title(label)
+    plt.close()
+
+    return fig, axes

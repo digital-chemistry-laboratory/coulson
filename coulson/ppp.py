@@ -13,8 +13,7 @@ import scipy.spatial
 
 from coulson.ci import calculate_matrix_element, generate_excitations
 from coulson.data import ANGSTROM_TO_BOHR, BOHR_TO_ANGSTROM, EV_TO_HARTREE
-from coulson.huckel import HuckelCalculator
-from coulson.matrix import InputData, prepare_huckel_matrix
+from coulson.huckel import HuckelCalculator, InputData, prepare_huckel_matrix
 from coulson.parameters import (
     BEVERIDGE_HINZE,
     CHARGES,

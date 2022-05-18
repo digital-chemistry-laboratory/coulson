@@ -8,7 +8,7 @@ from typing import Sequence, Tuple
 
 import numpy as np
 
-from coulson.graph import cycles_from_connectivity
+from coulson.graph_utils import get_simple_cycles
 from coulson.parameters import beta_from_r, N_ELECTRONS, PARAMETER_SETS
 from coulson.typing import (
     Array1DFloat,
@@ -79,9 +79,9 @@ class HuckelCalculator:
         n_electrons = sum(electrons) - charge
 
         # Create connectivity matrix
-        connectivity_matrix: Array2DInt = np.array(huckel_matrix)
+        connectivity_matrix: Array2DInt = np.zeros_like(huckel_matrix, dtype=int)
+        connectivity_matrix[huckel_matrix.nonzero()] = 1
         np.fill_diagonal(connectivity_matrix, 0)
-        connectivity_matrix[connectivity_matrix.nonzero()] = 1
         self.connectivity_matrix = connectivity_matrix
 
         # Get number of orbitals
@@ -180,7 +180,7 @@ class HuckelCalculator:
         Returns:
             rings: Rings
         """
-        rings = cycles_from_connectivity(self.connectivity_matrix)
+        rings = get_simple_cycles(self.connectivity_matrix)
         rings = [[i + 1 for i in ring] for ring in rings]
         return rings
 

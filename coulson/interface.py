@@ -13,7 +13,8 @@ import numpy as np
 import scipy.spatial
 
 from coulson.data import COV_RADII_PYYKKO, SYMBOLS_TO_NUMBERS
-from coulson.matrix import InputData
+from coulson.graph_utils import order_cycle
+from coulson.huckel import InputData
 from coulson.typing import (
     Array1DBool,
     Array1DFloat,
@@ -427,19 +428,25 @@ def process_rdkit_mol(
     ],
     globals(),
 )
-def coords_2D_from_rdkit(
+def gen_coords_for_mol(
     mol: Chem.Mol, bond_length: float = 1.4, coordgen: bool = True
 ) -> Array2DFloat:
-    """Returns 2D coordinates computed with RDKit.
+    """Generates 2D coordinates for RDKit Mol and returns them.
 
     Args:
-        mol: RDKit Mol object
+        mol: RDKit Mol object. Changed in the process
         bond_length: Bond length
         coordgen: Whether to use CoordGen or RDKit's default algorithm.
 
     Returns:
         coordinates: 2D coordinates (Å)
+
+    Raises:
+        ValueError: If Mol has coordinates already
     """
+    n_conformers = mol.GetNumConformers()
+    if n_conformers > 0:
+        raise ValueError(f"Mol already has coordinates: {n_conformers} conformers")
     if coordgen is True:
         ps = rdCoordGen.CoordGenParams()
         ps.minimizerPrecision = ps.sketcherBestPrecision
@@ -454,6 +461,46 @@ def coords_2D_from_rdkit(
     coordinates = mol.GetConformer().GetPositions()
 
     return coordinates
+
+
+@requires_dependency([Import(module="rdkit", item="Chem")], globals())
+def cycles_from_mol(mol: Chem.Mol) -> list[tuple[int, ...]]:
+    """Returns cycles from RDKit Mol object.
+
+    Args:
+        mol: RDKit Mol object
+
+    Returns:
+        cycles: Cycles
+    """
+    ri = mol.GetRingInfo()
+    G = nx.from_numpy_array(Chem.GetAdjacencyMatrix(mol))
+    cycles = [order_cycle(cycle, G) for cycle in ri.AtomRings()]
+
+    return cycles
+
+
+@requires_dependency([Import(module="rdkit", item="Chem")], globals())
+def mask_mol(mol: Chem.Mol, mask: ArrayLike1D) -> Chem.Mol:
+    """Returns RDKit Mol where atom with False indices in mask have been removed.
+
+    Args:
+        mol: RDKit Mol object
+        mask: Boolean mask
+
+    Returns:
+        masked_mol: Masked Mol object
+    """
+    mask: Array1DBool = np.asarray(mask)
+    rw_mol = Chem.RWMol(mol)
+    for i in reversed(np.where(~mask)[0]):
+        rw_mol.RemoveAtom(int(i))
+    masked_mol = rw_mol.GetMol()
+    Chem.SanitizeMol(
+        masked_mol,
+        Chem.SanitizeFlags.SANITIZE_ALL ^ Chem.SanitizeFlags.SANITIZE_KEKULIZE,
+    )
+    return masked_mol
 
 
 @requires_dependency(

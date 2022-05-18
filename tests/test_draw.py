@@ -6,8 +6,7 @@ import pytest
 from rdkit import Chem
 
 from coulson.draw import draw_mol, draw_orbital_energies
-from coulson.huckel import HuckelCalculator
-from coulson.matrix import prepare_huckel_matrix
+from coulson.huckel import HuckelCalculator, prepare_huckel_matrix
 
 matplotlib.use("Agg")
 
