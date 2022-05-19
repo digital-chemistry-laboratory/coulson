@@ -66,13 +66,13 @@ def calculate_bre(
             raise ValueError(f"Matrix element {i}, {j} is zero.")
 
     # Calculate reference roots
-    ref_roots = np.linalg.eigvalsh(huckel_matrix)[::-1]
+    cp_roots = np.linalg.eigvalsh(huckel_matrix)[::-1]
     huckel_matrix = huckel_matrix.astype(complex)
     for i, j in indices:
         huckel_matrix[i, j] *= 1j
         huckel_matrix[j, i] *= -1j
-    bre_roots = np.linalg.eigvalsh(huckel_matrix)[::-1]
-    bre = sum((ref_roots - bre_roots) * occupations)
+    ref_roots = np.linalg.eigvalsh(huckel_matrix)[::-1]
+    bre = sum((cp_roots - ref_roots) * occupations)
 
     return bre
 
