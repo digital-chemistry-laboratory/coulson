@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 import functools
 import itertools
 import typing
@@ -29,6 +29,10 @@ from coulson.typing import (
 from coulson.utils import Import, requires_dependency
 
 if typing.TYPE_CHECKING:  # pragma: no cover
+    from bcwizard.calc.biotsavart import BiotSavart  # pragma: no cover
+    from bcwizard.dummyman import gen_dummies  # pragma: no cover
+    from bcwizard.mol import Atom  # pragma: no cover
+    from bcwizard.mol import Molecule  # pragma: no cover
     import pyscf  # pragma: no cover
     from rdkit import Chem  # pragma: no cover
     from rdkit.Chem import AllChem, rdCoordGen
@@ -595,3 +599,70 @@ def generate_input_data(
     )
 
     return input_data, mask
+
+
+@requires_dependency(
+    [
+        Import(module="bcwizard.calc.biotsavart", item="BiotSavart"),
+        Import(module="bcwizard.dummyman", item="gen_dummies"),
+        Import(module="bcwizard.mol", item="Atom"),
+        Import(module="bcwizard.mol", item="Molecule"),
+    ],
+    globals(),
+)
+def nics_from_bcwizard(
+    symbols: Iterable[str],
+    coordinates: Iterable[Iterable[float]],
+    bcs: Mapping[tuple[int, int], float],
+    z_setoff: float = 1.00,
+    probe_coordinates: ArrayLike2D | None = None,
+) -> Array1DFloat:
+    """Calculates NICS values with BC-Wizard.
+
+    Install BC-Wizard from https://gitlab.com/porannegroup/bcwizard. The molecule is
+    assumed to be in the xy-plane and the NICS values will be calculated for the z
+    direction.
+
+    Args:
+        symbols: Atom symbols
+        coordinates: Coordinates (Å)
+        bcs: Bond currents
+        z_setoff: Setoff of NICS probes in the Z direction.
+        probe_coordinates: Optional set of probe coordinates. If None, BC-Wizard will
+            be used to generate probe coordinates at the ring centers.
+
+    Returns:
+        nics: NICS values (ppm)
+    """
+    atoms = {
+        i: Atom(atomID=i, element=symbol, x=x, y=y, z=z)
+        for i, (symbol, (x, y, z)) in enumerate(zip(symbols, coordinates))
+    }
+    molecule = Molecule(atoms)
+    molecule.set_bcGraph()
+    attrs = {}
+    for i, j in molecule.bcGraph.edges():
+        I = bcs.get((i, j))
+        if I is None:
+            I = bcs.get((j, i))
+        else:
+            I = -I
+        attrs[(i, j)] = {"weight": I}
+    nx.set_edge_attributes(molecule.bcGraph, attrs)
+
+    benzene_current = 11.5 * 1e-9
+    bond_points = 100
+    setoff: Array1DFloat = np.array([0, 0, z_setoff])
+    if probe_coordinates is None:
+        probe_coordinates = gen_dummies(molecule, setoff)
+    else:
+        probe_coordinates = np.asarray(probe_coordinates)
+        probe_coordinates += setoff
+    nics_component = "z"
+
+    bs_calculator = BiotSavart(
+        molecule, benzene_current, n_points=bond_points, unit="au"
+    )
+
+    nics = bs_calculator.calc_nics(probe_coordinates, component=nics_component)
+    return nics
