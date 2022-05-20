@@ -234,6 +234,7 @@ def draw_mol(  # noqa: C901
     if ring_labels is not None and rings is not None:
         coordinates = mol.GetConformer().GetPositions()
         rw_mol = Chem.RWMol(mol)
+        properties = list(properties)
         for ring, label in zip(rings, ring_labels):
             idx = rw_mol.AddAtom(Chem.Atom(0))
             rw_mol.GetAtomWithIdx(idx).SetProp("atomNote", f"{label:.{n_decimals}f}")
@@ -241,6 +242,7 @@ def draw_mol(  # noqa: C901
             point = Point3D(*coords)
             conformer = rw_mol.GetConformer()
             conformer.SetAtomPosition(idx, point)
+            properties.append(0)
         mol = rw_mol.GetMol()
         Chem.SanitizeMol(
             mol, Chem.SanitizeFlags.SANITIZE_ALL ^ Chem.SanitizeFlags.SANITIZE_KEKULIZE
@@ -260,7 +262,9 @@ def draw_mol(  # noqa: C901
 
     # Draw properties with similarity map
     if properties is not None:
-        SimilarityMaps.GetSimilarityMapFromWeights(mol, list(properties), draw2d=d2d)
+        SimilarityMaps.GetSimilarityMapFromWeights(
+            mol, list(properties), legend=mol_label, draw2d=d2d
+        )
 
     # Draw circles
     if circle_values is not None and rings is not None:
