@@ -583,6 +583,8 @@ def generate_input_data(
         if generate_twist_angles is True:
             twist_angles = determine_angles(coordinates, connectivity_matrix, mask)
             twist_angles = twist_angles[mask, :][:, mask]
+        else:
+            twist_angles = None
         coordinates = coordinates[mask]
     else:
         twist_angles = None
@@ -614,8 +616,10 @@ def nics_from_bcwizard(
     symbols: Iterable[str],
     coordinates: Iterable[Iterable[float]],
     bcs: Mapping[tuple[int, int], float],
-    z_setoff: float = 1.00,
+    z_setoff: float = 1.15,
     probe_coordinates: ArrayLike2D | None = None,
+    benzene_current: float = 11.5,
+    n_bond_points: int = 100,
 ) -> Array1DFloat:
     """Calculates NICS values with BC-Wizard.
 
@@ -630,6 +634,8 @@ def nics_from_bcwizard(
         z_setoff: Setoff of NICS probes in the Z direction.
         probe_coordinates: Optional set of probe coordinates. If None, BC-Wizard will
             be used to generate probe coordinates at the ring centers.
+        benzene_current: Reference current for benzene (nT)
+        n_bond_points: Number of points per bond
 
     Returns:
         nics: NICS values (ppm)
@@ -639,7 +645,8 @@ def nics_from_bcwizard(
         for i, (symbol, (x, y, z)) in enumerate(zip(symbols, coordinates))
     }
     molecule = Molecule(atoms)
-    molecule.set_bcGraph()
+    bc_graph = nx.from_edgelist(bcs.keys()).to_directed()
+    molecule.bcGraph = bc_graph
     attrs = {}
     for i, j in molecule.bcGraph.edges():
         I = bcs.get((i, j))
@@ -650,8 +657,6 @@ def nics_from_bcwizard(
         attrs[(i, j)] = {"weight": I}
     nx.set_edge_attributes(molecule.bcGraph, attrs)
 
-    benzene_current = 11.5 * 1e-9
-    bond_points = 100
     setoff: Array1DFloat = np.array([0, 0, z_setoff])
     if probe_coordinates is None:
         probe_coordinates = gen_dummies(molecule, setoff)
@@ -661,7 +666,7 @@ def nics_from_bcwizard(
     nics_component = "z"
 
     bs_calculator = BiotSavart(
-        molecule, benzene_current, n_points=bond_points, unit="au"
+        molecule, benzene_current * 1e-9, n_points=n_bond_points, unit="au"
     )
 
     nics = bs_calculator.calc_nics(probe_coordinates, component=nics_component)

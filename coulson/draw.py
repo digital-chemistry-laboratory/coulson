@@ -162,7 +162,8 @@ def draw_mol(  # noqa: C901
     highlighted_atoms: Iterable[int] | None = None,
     highlighted_bonds: Iterable[int] | None = None,
     size: tuple[int, int] = (400, 400),
-    n_decimals: int = 3,
+    fixed_bond_length: float = -1.0,
+    draw_radicals: bool = True,
     img_format: str = "svg",
 ) -> str | bytes:
     """Draw molecule with RDKit.
@@ -184,7 +185,8 @@ def draw_mol(  # noqa: C901
         highlighted_atoms: Indices for atoms to highlight
         highlighted_bonds: Indices for bonds to highlight
         size: Size of RDKit draw object
-        n_decimals: Number of decimals for properties and labels
+        fixed_bond_length: Fixed bond length in pixels (-1.0 means no fixing)
+        draw_radicals: Whether to draw radical dots
         img_format: Image format: 'png' or 'svg'
 
     Returns:
@@ -218,6 +220,13 @@ def draw_mol(  # noqa: C901
         )
     d2d = draw_method(*size)
 
+    # Set the bond length in pixels
+    d2d.drawOptions().fixedBondLength = fixed_bond_length
+
+    #
+    if draw_radicals is False:
+        d2d.drawOptions().includeRadicals = False
+
     # Add atom and bond indices
     if atom_numbers is True:
         d2d.drawOptions().addAtomIndices = True
@@ -227,10 +236,10 @@ def draw_mol(  # noqa: C901
     # Add atom and bond labels
     if atom_labels is not None:
         for atom, label in zip(mol.GetAtoms(), atom_labels):
-            atom.SetProp("atomNote", f"{label:.{n_decimals}f}")
+            atom.SetProp("atomNote", label)
     if bond_labels is not None:
         for bond, label in zip(mol.GetBonds(), bond_labels):
-            bond.SetProp("bondNote", f"{label:.{n_decimals}f}")
+            bond.SetProp("bondNote", label)
     if ring_labels is not None and rings is not None:
         coordinates = mol.GetConformer().GetPositions()
         rw_mol = Chem.RWMol(mol)
@@ -238,7 +247,7 @@ def draw_mol(  # noqa: C901
             properties = list(properties)
         for ring, label in zip(rings, ring_labels):
             idx = rw_mol.AddAtom(Chem.Atom(0))
-            rw_mol.GetAtomWithIdx(idx).SetProp("atomNote", f"{label:.{n_decimals}f}")
+            rw_mol.GetAtomWithIdx(idx).SetProp("atomNote", label)
             coords = np.mean(coordinates[list(ring)], axis=0)
             point = Point3D(*coords)
             conformer = rw_mol.GetConformer()
