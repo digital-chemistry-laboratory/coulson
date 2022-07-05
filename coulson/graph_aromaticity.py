@@ -437,8 +437,10 @@ def global_analysis(circuits: Iterable[Circuit]) -> tuple[float, float]:
 
 def calculate_m_sse(
     circuits: Iterable[Circuit],
-    connectivity_matrix: ArrayLike2D,
     excluded: Iterable[Iterable[int]],
+    connectivity_matrix: ArrayLike2D | None = None,
+    coordinates: ArrayLike2D | None = None,
+    method: str = "gibbs",
 ) -> float:
     """Calculates magnetic superaromatic stabilization energy.
 
@@ -446,20 +448,45 @@ def calculate_m_sse(
         circuits: Circuits
         excluded: Cycles to exclude from cycle basis
         connectivity_matrix: Connectivity matrix
+        coordinates: Coordinates (Å)
+        method: Method: 'gibbs' or 'graphical'
 
     Returns:
         m_sse: Magnetic superaromatic stabilization energy
+
+    Raises:
+        ValueError: When method is not supported or incompatabile with optional keywords
     """
     # Calculate total MRE
     mre_tot, _ = global_analysis(circuits)
 
-    # Calculate reduced MRE
-    reduced_cycles = get_simple_cycles(connectivity_matrix, excluded=excluded)
-    reduced_circuits = [
-        circuit for circuit in circuits if circuit.indices in reduced_cycles
-    ]
+    # Calculate the MRE from the reduced set of cycles
+    if method == "gibbs":
+        if connectivity_matrix is None:
+            raise ValueError("Connectivity matrix needed.")
+        reduced_cycles = get_simple_cycles(connectivity_matrix, excluded=excluded)
+        reduced_circuits = [
+            circuit for circuit in circuits if circuit.indices in reduced_cycles
+        ]
+    elif method == "graphical":
+        if coordinates is None:
+            raise ValueError("Coordinates needed.")
+        else:
+            coordinates = np.asarray(coordinates)
+        polygons = [Polygon(coordinates[list(circuit.indices)]) for circuit in circuits]
+        polygons_ref = [Polygon(coordinates[list(indices)]) for indices in excluded]
+        mask = [
+            any([polygon_ref.covered_by(polygon) for polygon_ref in polygons_ref])
+            for polygon in polygons
+        ]
+        reduced_circuits = [
+            circuit for i, circuit in enumerate(circuits) if mask[i] is False
+        ]
+    else:
+        raise ValueError(
+            f"Method not supported: {method}. Choose 'gibbs' or 'graphical'"
+        )
     mre_reduced, _ = global_analysis(reduced_circuits)
-
     m_sse = mre_tot - mre_reduced
 
     return m_sse
@@ -505,7 +532,12 @@ def calculate_sse(  # noqa: C901
         cycle_basis = minimum_cycle_basis(G)
 
     # Do connected components analysis and consider only cycles from current component
-    indices = list(nx.node_connected_component(G, ring[0]))
+    # indices = list(nx.node_connected_component(G, ring[0]))
+    indices = [
+        list(indices)
+        for indices in nx.biconnected_components(G)
+        if indices.issuperset(ring)
+    ][0]
     polygon_cycles = [
         cycle for cycle in cycle_basis if len(set(cycle).intersection(indices)) > 0
     ]
