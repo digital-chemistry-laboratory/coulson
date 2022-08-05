@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 import functools
 import itertools
 import typing
@@ -29,6 +29,10 @@ from coulson.typing import (
 from coulson.utils import Import, requires_dependency
 
 if typing.TYPE_CHECKING:  # pragma: no cover
+    from bcwizard.calc.biotsavart import BiotSavart  # pragma: no cover
+    from bcwizard.dummyman import gen_dummies  # pragma: no cover
+    from bcwizard.mol import Atom  # pragma: no cover
+    from bcwizard.mol import Molecule  # pragma: no cover
     import pyscf  # pragma: no cover
     from rdkit import Chem  # pragma: no cover
     from rdkit.Chem import AllChem, rdCoordGen
@@ -256,9 +260,9 @@ def determine_angles(  # noqa: C901
         # Allow perfect conjugation if an atom does not have any neighbors
         if len(combinations) == 0:
             if method == "cos":
-                cos = 1
+                cos = 1.0
             elif method == "atan2":
-                angle = 0
+                angle = 0.0
         # Determine the twist angle as the average over all combinations
         else:
             if method == "cos":
@@ -283,11 +287,10 @@ def determine_angles(  # noqa: C901
                 ):
                     linear = True
                     break
-                if method == "cos":
+                elif method == "cos":
                     # Get normal vectors and determine dihedral angle
-                    # TODO: Remove type ignores when https://github.com/numpy/numpy/pull/21216 is released  # noqa: B950
                     n_i: Array1DFloat = np.cross(v_ik, v_ij)
-                    n_i /= np.linalg.norm(n_i)  # type: ignore
+                    n_i /= np.linalg.norm(n_i)
                     n_j: Array1DFloat = np.cross(v_jl, v_ji)
                     n_j /= np.linalg.norm(n_j)
 
@@ -299,7 +302,7 @@ def determine_angles(  # noqa: C901
                     b_2 = v_ij / np.linalg.norm(v_ij)
                     b_3 = v_jl / np.linalg.norm(v_jl)
                     n_1: Array1DFloat = np.cross(b_1, b_2)
-                    n_2: Array1DFloat = np.cross(b_2, b_3)  # type: ignore
+                    n_2: Array1DFloat = np.cross(b_2, b_3)
                     m_1: Array1DFloat = np.cross(n_1, b_2)
                     x = np.dot(n_1, n_2)
                     y = np.dot(m_1, n_2)
@@ -308,14 +311,14 @@ def determine_angles(  # noqa: C901
 
             if linear is True:
                 if method == "cos":
-                    cos = 1
+                    cos = 1.0
                 elif method == "atan2":
-                    angle = 0
+                    angle = 0.0
             else:
                 if method == "cos":
-                    cos = np.mean(cosines)
+                    cos = np.mean(np.array(cosines))
                 elif method == "atan2":
-                    angle = np.mean(angles)
+                    angle = np.mean(np.array(angles))
         if method == "cos":
             angle = np.rad2deg(np.arccos(cos))
         elif method == "atan2":
@@ -579,6 +582,8 @@ def generate_input_data(
         if generate_twist_angles is True:
             twist_angles = determine_angles(coordinates, connectivity_matrix, mask)
             twist_angles = twist_angles[mask, :][:, mask]
+        else:
+            twist_angles = None
         coordinates = coordinates[mask]
     else:
         twist_angles = None
@@ -595,3 +600,73 @@ def generate_input_data(
     )
 
     return input_data, mask
+
+
+@requires_dependency(
+    [
+        Import(module="bcwizard.calc.biotsavart", item="BiotSavart"),
+        Import(module="bcwizard.dummyman", item="gen_dummies"),
+        Import(module="bcwizard.mol", item="Atom"),
+        Import(module="bcwizard.mol", item="Molecule"),
+    ],
+    globals(),
+)
+def nics_from_bcwizard(
+    symbols: Iterable[str],
+    coordinates: Iterable[Iterable[float]],
+    bcs: Mapping[tuple[int, int], float],
+    z_setoff: float = 1.15,
+    probe_coordinates: ArrayLike2D | None = None,
+    benzene_current: float = 11.5,
+    n_bond_points: int = 100,
+) -> Array1DFloat:
+    """Calculates NICS values with BC-Wizard.
+
+    Install BC-Wizard from https://gitlab.com/porannegroup/bcwizard. The molecule is
+    assumed to be in the xy-plane and the NICS values will be calculated for the z
+    direction.
+
+    Args:
+        symbols: Atom symbols
+        coordinates: Coordinates (Å)
+        bcs: Bond currents
+        z_setoff: Setoff of NICS probes in the Z direction.
+        probe_coordinates: Optional set of probe coordinates. If None, BC-Wizard will
+            be used to generate probe coordinates at the ring centers.
+        benzene_current: Reference current for benzene (nT)
+        n_bond_points: Number of points per bond
+
+    Returns:
+        nics: NICS values (ppm)
+    """
+    atoms = {
+        i: Atom(atomID=i, element=symbol, x=x, y=y, z=z)
+        for i, (symbol, (x, y, z)) in enumerate(zip(symbols, coordinates))
+    }
+    molecule = Molecule(atoms)
+    bc_graph = nx.from_edgelist(bcs.keys()).to_directed()
+    molecule.bcGraph = bc_graph
+    attrs = {}
+    for i, j in molecule.bcGraph.edges():
+        I = bcs.get((i, j))
+        if I is None:
+            I = bcs.get((j, i))
+        else:
+            I = -I
+        attrs[(i, j)] = {"weight": I}
+    nx.set_edge_attributes(molecule.bcGraph, attrs)
+
+    setoff: Array1DFloat = np.array([0, 0, z_setoff])
+    if probe_coordinates is None:
+        probe_coordinates = gen_dummies(molecule, setoff)
+    else:
+        probe_coordinates = np.asarray(probe_coordinates)
+        probe_coordinates += setoff
+    nics_component = "z"
+
+    bs_calculator = BiotSavart(
+        molecule, benzene_current * 1e-9, n_points=n_bond_points, unit="au"
+    )
+
+    nics = bs_calculator.calc_nics(probe_coordinates, component=nics_component)
+    return nics
