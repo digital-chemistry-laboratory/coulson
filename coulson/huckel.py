@@ -245,9 +245,19 @@ class HuckelCalculator:
             shell_occupations[j] = sum(occupations[i : i + degeneracy]) / degeneracy
             i += degeneracy
 
+        # Set shell spin occupations
+        shell_spin_occupations = np.zeros_like(unique_energies)
+        i = 0
+        for j, degeneracy in enumerate(degeneracies):
+            shell_spin_occupations[j] = (
+                sum(spin_occupations[i : i + degeneracy]) / degeneracy
+            )
+            i += degeneracy
+
         self.occupations = occupations
         self.shell_occupations_avg = shell_occupations
         self.spin_occupations = spin_occupations
+        self.shell_spin_occupations_avg = shell_spin_occupations
         self.n_occupied = n_occupied
         self.n_unpaired = n_unpaired
         self.unique_energies = unique_energies

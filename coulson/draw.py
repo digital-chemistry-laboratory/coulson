@@ -151,14 +151,16 @@ def draw_mol(  # noqa: C901
     properties: Iterable[float] | None = None,
     atom_numbers: bool = False,
     atom_labels: Iterable[float] | None = None,
+    atom_colors: Iterable[str] | None = None,
     bond_numbers: bool = False,
     bond_labels: Iterable[float] | None = None,
+    bond_colors: Iterable[str] | None = None,
     rings: Iterable[Iterable[int]] | None = None,
     ring_labels: Iterable[float] | None = None,
     circle_values: Iterable[float] | None = None,
     circle_radius: float = 0.3,
     circle_cmap: str = "RdBu",
-    circle_cmax: float | None = 0.25,
+    circle_cmax: float | None = None,
     highlighted_atoms: Iterable[int] | None = None,
     highlighted_bonds: Iterable[int] | None = None,
     size: tuple[int, int] = (400, 400),
@@ -174,8 +176,10 @@ def draw_mol(  # noqa: C901
         properties: Properties for contour plot
         atom_numbers: Whether to print atom numbers
         atom_labels: Labels to print for atoms
+        atom_colors: Atom colors
         bond_numbers: Whether to print bond numbers
         bond_labels: Labels to print for bonds
+        bond_colors: Bond colors
         rings: Ring indices
         ring_labels: Ring labels
         circle_values: Value to plot as colored circles in rings
@@ -267,7 +271,9 @@ def draw_mol(  # noqa: C901
         mol,
         legend=mol_label,
         highlightAtoms=highlighted_atoms,
+        highlightAtomColors=atom_colors,
         highlightBonds=highlighted_bonds,
+        highlightBondColors=bond_colors,
         kekulize=False,
     )
 
@@ -281,7 +287,7 @@ def draw_mol(  # noqa: C901
     if circle_values is not None and rings is not None:
         coordinates = mol.GetConformer().GetPositions()
         if circle_cmax is None:
-            max_val = max(circle_values)
+            max_val = max([abs(value) for value in circle_values])
         else:
             max_val = circle_cmax
         for ring, value in zip(rings, circle_values):
@@ -289,7 +295,7 @@ def draw_mol(  # noqa: C901
             p1 = Point2D(center[0] - circle_radius, center[1] - circle_radius)
             p2 = Point2D(center[0] + circle_radius, center[1] + circle_radius)
             cmap = plt.cm.get_cmap(circle_cmap)
-            rgb = cmap(value / abs(max_val) / 2 + 0.5)[:3]
+            rgb = cmap(value / max_val / 2 + 0.5)[:3]
             d2d.SetColour(rgb)
             d2d.DrawEllipse(p1, p2)
 
