@@ -52,7 +52,7 @@ class HuckelCalculator:
     degeneracies: Array1DInt
     energies: Array1DFloat
     multiplicity: int
-    electrons: Iterable[int]
+    electrons: Array1DInt
     n_electrons: int
     n_occupied: int
     n_orbitals: int
@@ -75,7 +75,7 @@ class HuckelCalculator:
         self.huckel_matrix = huckel_matrix
 
         # Set up number of electrons
-        self.electrons = electrons
+        self.electrons = list(electrons)
         n_electrons = sum(electrons) - charge
 
         # Create connectivity matrix

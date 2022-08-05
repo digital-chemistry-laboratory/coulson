@@ -80,13 +80,12 @@ def test_draw_mol_svg(huckel_input):
         mol,
         properties=hc.coefficients[0],
         atom_numbers=True,
-        atom_labels=hc.charges,
+        atom_labels=[f"{charge:.3f}" for charge in hc.charges],
         bond_numbers=True,
-        bond_labels=bond_orders,
+        bond_labels=[f"{bond_order:.3f}" for bond_order in bond_orders],
         highlighted_atoms=[0],
         highlighted_bonds=[0],
         size=(200, 200),
-        n_decimals=4,
         img_format="svg",
     )
 

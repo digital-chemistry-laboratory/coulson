@@ -260,9 +260,9 @@ def determine_angles(  # noqa: C901
         # Allow perfect conjugation if an atom does not have any neighbors
         if len(combinations) == 0:
             if method == "cos":
-                cos = 1
+                cos = 1.0
             elif method == "atan2":
-                angle = 0
+                angle = 0.0
         # Determine the twist angle as the average over all combinations
         else:
             if method == "cos":
@@ -287,11 +287,10 @@ def determine_angles(  # noqa: C901
                 ):
                     linear = True
                     break
-                if method == "cos":
+                elif method == "cos":
                     # Get normal vectors and determine dihedral angle
-                    # TODO: Remove type ignores when https://github.com/numpy/numpy/pull/21216 is released  # noqa: B950
                     n_i: Array1DFloat = np.cross(v_ik, v_ij)
-                    n_i /= np.linalg.norm(n_i)  # type: ignore
+                    n_i /= np.linalg.norm(n_i)
                     n_j: Array1DFloat = np.cross(v_jl, v_ji)
                     n_j /= np.linalg.norm(n_j)
 
@@ -303,7 +302,7 @@ def determine_angles(  # noqa: C901
                     b_2 = v_ij / np.linalg.norm(v_ij)
                     b_3 = v_jl / np.linalg.norm(v_jl)
                     n_1: Array1DFloat = np.cross(b_1, b_2)
-                    n_2: Array1DFloat = np.cross(b_2, b_3)  # type: ignore
+                    n_2: Array1DFloat = np.cross(b_2, b_3)
                     m_1: Array1DFloat = np.cross(n_1, b_2)
                     x = np.dot(n_1, n_2)
                     y = np.dot(m_1, n_2)
@@ -312,14 +311,14 @@ def determine_angles(  # noqa: C901
 
             if linear is True:
                 if method == "cos":
-                    cos = 1
+                    cos = 1.0
                 elif method == "atan2":
-                    angle = 0
+                    angle = 0.0
             else:
                 if method == "cos":
-                    cos = np.mean(cosines)
+                    cos = np.mean(np.array(cosines))
                 elif method == "atan2":
-                    angle = np.mean(angles)
+                    angle = np.mean(np.array(angles))
         if method == "cos":
             angle = np.rad2deg(np.arccos(cos))
         elif method == "atan2":

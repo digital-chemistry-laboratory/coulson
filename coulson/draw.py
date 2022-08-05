@@ -53,6 +53,7 @@ def draw_orbital_energies(  # noqa: C901
     Raises:
         ValueError: When maximum degeneracy exceeds 2.
     """
+    energies: Array1DFloat = np.array(energies)
     # Set up plot
     fig, ax = plt.subplots(figsize=fig_size)
     ax.set_xticklabels([])
@@ -64,7 +65,7 @@ def draw_orbital_energies(  # noqa: C901
     ax.set_ylabel(r"$E - \alpha$ ($\beta$)")
 
     # Calculate offsets
-    energies = np.round(energies, 3)
+    energies: Array1DFloat = np.round(energies, 3)
     energies_unique: Array1DFloat
     degeneracies: Array1DInt
     energies_unique, degeneracies = np.unique(energies, return_counts=True)
