@@ -325,7 +325,7 @@ def prepare_huckel_matrix(
         ValueError: If var_cc requested but distance_matrix not given.
     """
     # Build huckel matrix
-    huckel_matrix: Array2DFloat = np.asarray(connectivity_matrix, dtype=float)
+    huckel_matrix: Array2DFloat = np.array(connectivity_matrix, dtype=float)
     parameters = PARAMETER_SETS[parametrization]
 
     # Set k_xy values
