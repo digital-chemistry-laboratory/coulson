@@ -35,7 +35,7 @@ if typing.TYPE_CHECKING:  # pragma: no cover
     from bcwizard.mol import Molecule  # pragma: no cover
     import pyscf  # pragma: no cover
     from rdkit import Chem  # pragma: no cover
-    from rdkit.Chem import AllChem, rdCoordGen
+    from rdkit.Chem import AllChem, rdCoordGen, rdDetermineBonds
 
     from coulson.ppp import PPPCalculator  # pragma: no cover
 
@@ -422,6 +422,29 @@ def process_rdkit_mol(
     )
 
     return input_data, mask
+
+
+@requires_dependency(
+    [
+        Import(module="rdkit", item="Chem"),
+        Import(module="rdkit.Chem", item="rdDetermineBonds"),
+    ],
+    globals(),
+)
+def mol_from_xyz(filename: str, charge: int = 0) -> Chem.Mol:
+    """Generate RDKit Mol object from xyz file.
+
+    Args:
+        filename: XYZ filename
+        charge: Molecular charge
+
+    Returns:
+        mol: RDKit Mol object
+    """
+    mol = Chem.MolFromXYZFile(filename)
+    rdDetermineBonds.DetermineBonds(mol, charge=charge)
+
+    return mol
 
 
 @requires_dependency(

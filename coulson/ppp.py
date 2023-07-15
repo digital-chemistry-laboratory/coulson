@@ -1213,18 +1213,28 @@ def calculate_exchange(ppp: PPPCalculator) -> float:
     return exchange
 
 
-def calculate_dsp(ppp: PPPCalculator) -> float:
+def calculate_dsp(
+    ppp: PPPCalculator,
+    ci: bool = False,
+    energy_s_1: float = None,
+    energy_t_1: float = None,
+) -> float:
     """Calculate dynamic spin polarization difference with perturbation theory.
 
-    Spin polarization difference between singlet and triplet HOMO->LUMO excited states.
-    Approach from 10.1007/BF00549021. Negative values indicate singlet is more
-    stabilized than triplet.
+    Spin polarization difference between singlet and triplet HOMO->LUMO excited
+    states. Approach from 10.1007/BF00549021. Perturbation theory on CIS states
+    following 10.1016/0009-2614(94)00070-0. Negative values indicate singlet is
+    more stabilized than triplet.
 
     Args:
         ppp: PPPCalculator object
+        ci: Calculate DSP relative to the CIS states
+        energy_s_1: CIS energy of S1 state (a.u.)
+        energy_t_1: CIS energy of T1 state (a.u.)
 
     Returns:
         dsp: Stabilization of singlet over triplet (a.u.)
+        excitations: DSP values for each excitaiton (a.u.)
     """
     # Set up variables
     n_occupied = ppp.n_occupied
@@ -1236,6 +1246,14 @@ def calculate_dsp(ppp: PPPCalculator) -> float:
     ppp._setup_mo_integrals()
     ppp._setup_fock_matrix_mo()
 
+    if ci is True:
+        if energy_s_1 is None:
+            ppp.ci(n_states=3, multiplicity="singlet")
+            energy_s_1 = ppp.ci_energies[1] - ppp.ci_energies[0]
+        if energy_t_1 is None:
+            ppp.ci(n_states=3, multiplicity="triplet")
+            energy_t_1 = ppp.ci_energies[1] - ppp.ci_energies[0]
+
     # Generate all single excitations
     single_excitations = list(
         itertools.product(
@@ -1244,24 +1262,29 @@ def calculate_dsp(ppp: PPPCalculator) -> float:
     )
 
     # Do perturbation
-    s_1_all = []
-    t_1_all = []
-    t_2_all = []
+    excitations = {}
     for i, j in single_excitations:
         k_x = ppp.mo_integrals[i, homo_idx, homo_idx, j]
         k_y = ppp.mo_integrals[i, lumo_idx, lumo_idx, j]
-        gap = ppp.fock_matrix_mo[j, j] - ppp.fock_matrix_mo[i, i]
+        if ci is True:
+            gap = (
+                ppp.fock_matrix_mo[j, j]
+                + ppp.fock_matrix[lumo_idx, lumo_idx]
+                - ppp.fock_matrix[homo_idx, homo_idx]
+                - ppp.fock_matrix_mo[i, i]
+            )
+        else:
+            gap = ppp.fock_matrix_mo[j, j] - ppp.fock_matrix_mo[i, i]
         s_1 = (3 / 2) * (k_x - k_y) ** 2 / gap
         t_1 = (1 / 2) * (k_x - k_y) ** 2 / gap
         t_2 = (k_x + k_y) ** 2 / gap
-        s_1_all.append(s_1)
-        t_1_all.append(t_1)
-        t_2_all.append(t_2)
+        excitations[(i, j)] = {
+            "s_1": s_1,
+            "t_1": t_1,
+            "t_2": t_2,
+            "dsp": -s_1 + t_1 + t_2,
+        }
 
-    # Sum contributions and calculate DSP
-    s_1 = np.sum(s_1_all)
-    t_1 = np.sum(t_1_all)
-    t_2 = np.sum(t_2_all)
-    dsp: float = -(s_1 - t_1 - t_2)
+    dsp = sum(excitation["dsp"] for excitation in excitations.values())
 
-    return dsp
+    return dsp, excitations
