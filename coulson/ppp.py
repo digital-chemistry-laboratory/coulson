@@ -1267,17 +1267,25 @@ def calculate_dsp(
         k_x = ppp.mo_integrals[i, homo_idx, homo_idx, j]
         k_y = ppp.mo_integrals[i, lumo_idx, lumo_idx, j]
         if ci is True:
-            gap = (
+            gap_s = (
                 ppp.fock_matrix_mo[j, j]
                 + ppp.fock_matrix[lumo_idx, lumo_idx]
                 - ppp.fock_matrix[homo_idx, homo_idx]
                 - ppp.fock_matrix_mo[i, i]
+                - energy_s_1
+            )
+            gap_t = (
+                ppp.fock_matrix_mo[j, j]
+                + ppp.fock_matrix[lumo_idx, lumo_idx]
+                - ppp.fock_matrix[homo_idx, homo_idx]
+                - ppp.fock_matrix_mo[i, i]
+                - energy_t_1
             )
         else:
-            gap = ppp.fock_matrix_mo[j, j] - ppp.fock_matrix_mo[i, i]
-        s_1 = (3 / 2) * (k_x - k_y) ** 2 / gap
-        t_1 = (1 / 2) * (k_x - k_y) ** 2 / gap
-        t_2 = (k_x + k_y) ** 2 / gap
+            gap_s = gap_t = ppp.fock_matrix_mo[j, j] - ppp.fock_matrix_mo[i, i]
+        s_1 = (3 / 2) * (k_x - k_y) ** 2 / gap_s
+        t_1 = (1 / 2) * (k_x - k_y) ** 2 / gap_t
+        t_2 = (k_x + k_y) ** 2 / gap_t
         excitations[(i, j)] = {
             "s_1": s_1,
             "t_1": t_1,
