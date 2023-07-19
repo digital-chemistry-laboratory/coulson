@@ -1269,15 +1269,15 @@ def calculate_dsp(
         if ci is True:
             gap_s = (
                 ppp.fock_matrix_mo[j, j]
-                + ppp.fock_matrix[lumo_idx, lumo_idx]
-                - ppp.fock_matrix[homo_idx, homo_idx]
+                + ppp.fock_matrix_mo[lumo_idx, lumo_idx]
+                - ppp.fock_matrix_mo[homo_idx, homo_idx]
                 - ppp.fock_matrix_mo[i, i]
                 - energy_s_1
             )
             gap_t = (
                 ppp.fock_matrix_mo[j, j]
-                + ppp.fock_matrix[lumo_idx, lumo_idx]
-                - ppp.fock_matrix[homo_idx, homo_idx]
+                + ppp.fock_matrix_mo[lumo_idx, lumo_idx]
+                - ppp.fock_matrix_mo[homo_idx, homo_idx]
                 - ppp.fock_matrix_mo[i, i]
                 - energy_t_1
             )
