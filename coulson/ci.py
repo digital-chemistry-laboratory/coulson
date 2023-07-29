@@ -24,9 +24,6 @@ def generate_excitations(  # noqa: C901
     """
     excitations: list[tuple[tuple[int, ...], tuple[int, ...], str]] = []
 
-    # Generate ground state dummy excitation
-    excitations.append(((0,), (0,), "g"))
-
     # Add single excitations
     single_excitations_pre = list(
         itertools.product(

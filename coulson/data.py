@@ -4,31 +4,43 @@ from __future__ import annotations
 
 import scipy.constants
 
-EV = scipy.constants.eV
-"""float: Value of eV in SI units."""
+MOL: float = scipy.constants.Avogadro
+"""Avogadro's constant"""
 
-HARTREE = scipy.constants.physical_constants["atomic unit of energy"][0]
-"""float: Value of Hartree in SI units."""
+EV: float = scipy.constants.eV
+"""Value of eV in SI units."""
 
-HARTREE_TO_EV = HARTREE / EV
+HARTREE: float = scipy.constants.physical_constants["atomic unit of energy"][0]
+"""Value of Hartree in SI units."""
+
+KCAL: float = scipy.constants.calorie * 1000
+"""Value of Hartree in SI units."""
+
+HARTREE_TO_EV: float = HARTREE / EV
 """float: Conversion factor from Hartree to eV."""
 
-EV_TO_HARTREE = EV / HARTREE
-"""float: Conversion factor from eV to Hartree."""
+HARTREE_TO_KCAL = HARTREE / KCAL * MOL
+"""Conversion factor from Hartree to kcal/mol."""
 
-ANGSTROM = scipy.constants.angstrom
-"""float: Value of Ångström in SI units."""
+EV_TO_HARTREE: float = EV / HARTREE
+"""Conversion factor from eV to Hartree."""
 
-BOHR = scipy.constants.physical_constants["atomic unit of length"][0]
-"""float: Value of Bohr in SI units."""
+EV_TO_KCAL: float = EV / KCAL * MOL
+"""Conversion factor from eV to Hartree."""
 
-ANGSTROM_TO_BOHR = ANGSTROM / BOHR
-"""float: Conversion factor from Ångström to Bohr."""
+ANGSTROM: float = scipy.constants.angstrom
+"""Value of Ångström in SI units."""
 
-BOHR_TO_ANGSTROM = BOHR / ANGSTROM
-"""float: Conversion factor from Bohr to Ångström."""
+BOHR: float = scipy.constants.physical_constants["atomic unit of length"][0]
+"""Value of Bohr in SI units."""
 
-NUMBERS_TO_SYMBOLS = {
+ANGSTROM_TO_BOHR: float = ANGSTROM / BOHR
+"""Conversion factor from Ångström to Bohr."""
+
+BOHR_TO_ANGSTROM: float = BOHR / ANGSTROM
+"""Conversion factor from Bohr to Ångström."""
+
+NUMBERS_TO_SYMBOLS: dict[int, str] = {
     1: "H",
     2: "He",
     3: "Li",
@@ -148,13 +160,15 @@ NUMBERS_TO_SYMBOLS = {
     117: "Ts",
     118: "Og",
 }
-"""dict: Atomic numbers as keys and symbols as values."""
+"""Atomic numbers as keys and symbols as values."""
 
-SYMBOLS_TO_NUMBERS = {value: key for key, value in NUMBERS_TO_SYMBOLS.items()}
-"""dict: Atomic symbols as keys and numbers as values."""
+SYMBOLS_TO_NUMBERS: dict[str, int] = {
+    value: key for key, value in NUMBERS_TO_SYMBOLS.items()
+}
+"""Atomic symbols as keys and numbers as values."""
 
 # Pyykkö, P.; Atsumi, M. Chem. - Eur. J. 2009, 15, 186.
-COV_RADII_PYYKKO = {
+COV_RADII_PYYKKO: dict[int, float] = {
     1: 0.32,
     2: 0.46,
     3: 1.33,
@@ -274,4 +288,4 @@ COV_RADII_PYYKKO = {
     117: 1.65,
     118: 1.57,
 }
-"""dict: Atomic numbers as keys and Pyykkö covalent radii as values."""
+"""Atomic numbers as keys and Pyykkö covalent radii as values."""

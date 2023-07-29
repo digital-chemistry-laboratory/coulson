@@ -299,8 +299,8 @@ class PPPCalculator:
     oscillator_strengths: Array1DFloat
     overlap_matrix: Array2DFloat
     parametrization: Mapping[str, Any]
-    transition_densities: Array1DFloat
-    transition_dipole_moments: Array1DFloat
+    transition_density_matrices: list[Array2DFloat]
+    transition_dipole_moments: list[Array1DFloat]
     _iter_populations: list[Array1DFloat]
     _populations_old: Array1DFloat | None
 
@@ -340,7 +340,11 @@ class PPPCalculator:
 
         # Set up Hückel calculator
         hc = HuckelCalculator(
-            huckel_matrix, electrons, charge=charge, multiplicity=multiplicity
+            huckel_matrix,
+            electrons,
+            charge=charge,
+            multiplicity=multiplicity,
+            n_dec_degen=100,
         )
         self.density_matrix = hc.bo_matrix
 
@@ -897,90 +901,73 @@ class PPPCalculator:
         Args:
             f_type: Approximation for oscillator strenghts: 'length' (default) or
                 'velocity'
+
+        Raises:
+            ValueError: If option is not correct
         """
         oscillator_strengths = []
+        td_moments = []
+        td_matrices = []
 
-        # According to dipole length formula
-        if f_type == "length":
-            # Calculate transition densities
-            transition_densities_csf = []
-            for excitation in self.excitations[1:]:
+        options = ["length", "velocity"]
+        if f_type not in options:
+            raise ValueError(f"{f_type} is not in {options}")
+
+        # Loop over states
+        for k in range(self.n_states):
+            # Calculate transition density matrix in AO basis
+            # The factor √2 comes from working with spatial molecular orbitals
+            # https://doi.org/10.3390/molecules26144245 Eq. A6
+            td_matrix = np.zeros((self.n_orbitals, self.n_orbitals))
+
+            for idx, excitation in enumerate(self.excitations):
                 i, j, _ = excitation
-                transition_density = self.coefficients[i] * self.coefficients[j]
-                transition_densities_csf.append(transition_density)
-            transition_densities_csf: Array2DFloat = np.vstack(transition_densities_csf)
+                td_matrix += (
+                    np.outer(self.coefficients[i], self.coefficients[j])
+                    * self.ci_coefficients[k, idx]
+                )
+            td_matrix *= np.sqrt(2)
 
-            # Calculate oscillator strength, transition density and transition dipole
-            # moment
-            transition_dipole_moments = []
-            transition_densities = []
-            for k in range(1, self.n_states):
-                transition_density = np.sum(
-                    transition_densities_csf
-                    * self.ci_coefficients[k, 1:].reshape(-1, 1),
+            # According to dipole length formula
+            if f_type == "length":
+                td_moment = np.sum(
+                    td_matrix.diagonal().reshape(-1, 1)
+                    * self.coordinates
+                    * ANGSTROM_TO_BOHR,
                     axis=0,
                 )
-                transition_dip_moment = (
-                    np.sqrt(2)
-                    * np.sum(
-                        transition_density.reshape(-1, 1) * self.coordinates, axis=0
-                    )
-                    * ANGSTROM_TO_BOHR
-                )
-                excitation_energy = self.ci_energies[k] - self.ci_energies[0]
-                oscillator_strength = (
+                f = (
                     2
                     / 3
-                    * excitation_energy
-                    * np.linalg.norm(transition_dip_moment) ** 2
+                    * np.linalg.norm(td_moment) ** 2
+                    * (self.ci_energies[k] - self.electronic_energy)
                 )
-                oscillator_strengths.append(oscillator_strength)
-                transition_dipole_moments.append(transition_dip_moment)
-                transition_densities.append(transition_density)
-            transition_dipole_moments: Array1DFloat = np.array(
-                transition_dipole_moments
-            )
-            transition_densities: Array1DFloat = np.array(transition_densities)
-
-            self.transition_dipole_moments = transition_dipole_moments
-            self.transition_densities = transition_densities
-            self.transition_densities_csf = transition_densities_csf
-        # Calculate according to dipole velocity formula
-        elif f_type == "velocity":
-            # Calculate distances
-            distances = self.coordinates[:, None, :] - self.coordinates[None, :, :]
-            distances = distances.swapaxes(0, 1) * ANGSTROM_TO_BOHR
-
-            # Calculate transition dipole velocity moments
-            ps = []
-            for excitation in self.excitations[1:]:
-                i, j, _ = excitation
-                p = (
-                    np.sum(
-                        (
-                            np.outer(self.coefficients[i], self.coefficients[j])
-                            * self.core_matrix
-                        )[:, :, None]
-                        * distances,
-                        axis=(0, 1),
-                    )
+            # According to dipole velocity formula
+            elif f_type == "velocity":
+                distances = (
+                    self.coordinates[:, None, :] - self.coordinates[None, :, :]
+                ) * ANGSTROM_TO_BOHR
+                td_moment = np.sum(
+                    td_matrix[:, :, None]
                     * 1j
+                    * self.core_matrix[:, :, None]
+                    * distances,
+                    axis=(0, 1),
                 )
-                ps.append(p)
-            ps: Array1DFloat = np.array(ps)
-
-            # Calculate oscillator strength
-            for k in range(1, self.n_states):
-                p = np.sqrt(2) * np.sum(
-                    ps * self.ci_coefficients[k, 1].reshape(-1, 1),
-                    axis=0,
+                f = (
+                    2
+                    / 3
+                    * np.linalg.norm(td_moment) ** 2
+                    / (self.ci_energies[k] - self.electronic_energy)
                 )
-                excitation_energy = self.ci_energies[i] - self.ci_energies[0]
-                oscillator_strength = 2 / 3 * np.linalg.norm(p) ** 2 / excitation_energy
-                oscillator_strengths.append(oscillator_strength)
-        oscillator_strengths: Array1DFloat = np.array(oscillator_strengths)
+            oscillator_strengths.append(f)
+            td_moments.append(td_moment)
+            td_matrices.append(td_matrix)
 
+        # Store results
         self.oscillator_strengths = oscillator_strengths
+        self.transition_dipole_moments = td_moments
+        self.transition_density_matrices = td_matrices
 
     def calculate_mo_integral(self, i: int, j: int, k: int, l: int) -> float:
         """Calculate electron repulsion integral in molecular orbital basis.
@@ -1054,17 +1041,15 @@ class PPPCalculator:
         return huckel_matrix
 
     def _get_c_matrix(self, state: int) -> Array2DFloat:
-        if state < 1:
-            raise ValueError(f"Specified state is {state} but needs to be > 0.")
-        elif state > self.n_states:
+        if state > self.n_states:
             raise ValueError(
                 f"Specified state is {state} but only {self.n_states} possible."
             )
         c_matrix = np.zeros((self.n_occupied, self.n_virtual))
-        for idx, excitation in enumerate(self.excitations[1:]):
+        for idx, excitation in enumerate(self.excitations):
             i = excitation[0][0]
             a = excitation[1][0] - self.n_occupied
-            c_matrix[i, a] = self.ci_coefficients[state][1:][idx]
+            c_matrix[i, a] = self.ci_coefficients[state][idx]
         return c_matrix
 
     def get_ntos(self, state: int) -> tuple[Array2DFloat, Array2DFloat, Array1DFloat]:
@@ -1249,10 +1234,10 @@ def calculate_dsp(
     if ci is True:
         if energy_s_1 is None:
             ppp.ci(n_states=3, multiplicity="singlet")
-            energy_s_1 = ppp.ci_energies[1] - ppp.ci_energies[0]
+            energy_s_1 = ppp.ci_energies[0] - ppp.electronic_energy
         if energy_t_1 is None:
             ppp.ci(n_states=3, multiplicity="triplet")
-            energy_t_1 = ppp.ci_energies[1] - ppp.ci_energies[0]
+            energy_t_1 = ppp.ci_energies[0] - ppp.electronic_energy
 
     # Generate all single excitations
     single_excitations = list(

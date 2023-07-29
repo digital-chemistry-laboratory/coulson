@@ -38,6 +38,10 @@ if typing.TYPE_CHECKING:  # pragma: no cover
 def draw_orbital_energies(  # noqa: C901
     energies: ArrayLike1D,
     occupations: Iterable[int] | None = None,
+    axis_label: str = r"$E - \alpha$ ($\beta$)",
+    invert_axis: bool = True,
+    occupation_labels: Iterable[str] | None = None,
+    draw_occupation_labels: bool = True,
     fig_size: tuple[float, float] = (8, 12),
 ) -> tuple[plt.Figure, plt.Axes]:
     """Draw orbital energy diagram.
@@ -54,6 +58,8 @@ def draw_orbital_energies(  # noqa: C901
         ValueError: When maximum degeneracy exceeds 2.
     """
     energies: Array1DFloat = np.array(energies)
+    if occupation_labels is None and occupations is not None:
+        occupation_labels = occupations
     # Set up plot
     fig, ax = plt.subplots(figsize=fig_size)
     ax.set_xticklabels([])
@@ -61,8 +67,9 @@ def draw_orbital_energies(  # noqa: C901
         ax.spines[spine].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.get_xaxis().set_visible(False)
-    ax.invert_yaxis()
-    ax.set_ylabel(r"$E - \alpha$ ($\beta$)")
+    if invert_axis is True:
+        ax.invert_yaxis()
+    ax.set_ylabel(axis_label)
 
     # Calculate offsets
     energies: Array1DFloat = np.round(energies, 3)
@@ -83,20 +90,32 @@ def draw_orbital_energies(  # noqa: C901
 
     # Draw orbital energy levels
     ax.eventplot(
-        energies.reshape(-1, 1), lineoffsets=line_offsets, orientation="vertical"
+        energies.reshape(-1, 1),
+        lineoffsets=line_offsets,
+        orientation="vertical",
+        zorder=0,
     )
+    y_range = ax.get_ylim()[1] - ax.get_ylim()[0]
 
     # Draw electron arrows:
+    width = 0.01
+    head_width = 6 * width
+    head_length = 3 * head_width
+    height = 0.05
     if occupations is not None:
-        for occupation, energy, offset in zip(occupations, energies, line_offsets):
+        for occupation, label, energy, offset in zip(
+            occupations, occupation_labels, energies, line_offsets
+        ):
             if occupation in [0.5, 1.0]:
                 scale = occupation
                 ax.arrow(
                     offset,
-                    energy + 0.1 * scale,
+                    energy + height / 2 * scale * y_range,
                     0.0,
-                    -0.2 * scale,
-                    width=0.01,
+                    -height * scale * y_range,
+                    width=width,
+                    head_length=head_length,
+                    head_width=head_width,
                     fc="k",
                     length_includes_head=True,
                 )
@@ -104,19 +123,23 @@ def draw_orbital_energies(  # noqa: C901
                 scale = occupation - 1
                 ax.arrow(
                     offset - 0.1,
-                    energy + 0.1,
+                    energy + height / 2 * y_range,
                     0.0,
-                    -0.2,
-                    width=0.01,
+                    -height * y_range,
+                    width=width,
+                    head_length=head_length,
+                    head_width=head_width,
                     fc="k",
                     length_includes_head=True,
                 )
                 ax.arrow(
                     offset + 0.1,
-                    energy - 0.1 * scale,
+                    energy - height / 2 * scale * y_range,
                     0.0,
-                    0.2 * scale,
-                    width=0.01,
+                    height * scale * y_range,
+                    width=width,
+                    head_length=head_length,
+                    head_width=head_width,
                     fc="k",
                     length_includes_head=True,
                 )
@@ -127,7 +150,8 @@ def draw_orbital_energies(  # noqa: C901
                     f"Given occupation {occupation} not supported. "
                     "Use 0, 0.5, 1, 1.5, or 2"
                 )
-            ax.annotate(occupation, (offset - 0.7, energy))
+            if draw_occupation_labels is True:
+                ax.annotate(label, (offset - 0.7, energy))
 
     # Make energy labels
     for energy in energies_unique:
