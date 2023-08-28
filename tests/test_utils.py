@@ -1,4 +1,7 @@
 """Test utility functions and classes."""
+
+from __future__ import annotations
+
 from collections.abc import Sequence
 import itertools
 import sys
