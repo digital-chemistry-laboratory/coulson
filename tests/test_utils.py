@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 import itertools
 import sys
+from typing import Protocol, TypeVar
 
 import numpy as np
 import pytest
@@ -13,8 +14,11 @@ from coulson.graph_utils import get_simple_cycles
 from coulson.typing import Array2DInt
 from coulson.utils import Import, requires_dependency
 
+# TypeVar to parameterize for specific types
+A = TypeVar("A", list, tuple)
 
-def is_cyclic_permutation(a: Sequence[int], b: Sequence[int]) -> bool:
+
+def is_cyclic_permutation(a: A, b: A) -> bool:
     """Test if two cycles are permutations of each other.
 
     Taken from https://github.com/networkx/networkx/blob/main/networkx/algorithms/tests/test_cycles.py # noqa: B950
