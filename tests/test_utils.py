@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 import itertools
 import sys
-from typing import Protocol, TypeVar
+from typing import TypeVar
 
 import numpy as np
 import pytest
