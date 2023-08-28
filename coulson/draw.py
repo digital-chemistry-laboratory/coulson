@@ -49,6 +49,10 @@ def draw_orbital_energies(  # noqa: C901
     Args:
         energies: Orbital energies
         occupations: Orbital occupations
+        axis_label: Label for the energy axis
+        invert_axis: Whether to invert the energy axis
+        occupation_labels: Labels for the orbital occupations
+        draw_occupation_labels: Whether to draw the orbital occupation labels
         fig_size: Figure size (inch)
 
     Returns:
@@ -58,8 +62,7 @@ def draw_orbital_energies(  # noqa: C901
         ValueError: When maximum degeneracy exceeds 2.
     """
     energies: Array1DFloat = np.array(energies)
-    if occupation_labels is None and occupations is not None:
-        occupation_labels = occupations
+
     # Set up plot
     fig, ax = plt.subplots(figsize=fig_size)
     ax.set_xticklabels([])
@@ -102,7 +105,12 @@ def draw_orbital_energies(  # noqa: C901
     head_width = 6 * width
     head_length = 3 * head_width
     height = 0.05
-    if occupations is not None:
+    if draw_occupation_labels is True:
+        if occupations is None:
+            raise ValueError("Occupations need to be given.")
+        if occupation_labels is None:
+            occupation_labels = [str(i) for i in occupations]
+
         for occupation, label, energy, offset in zip(
             occupations, occupation_labels, energies, line_offsets
         ):

@@ -1201,9 +1201,9 @@ def calculate_exchange(ppp: PPPCalculator) -> float:
 def calculate_dsp(
     ppp: PPPCalculator,
     ci: bool = False,
-    energy_s_1: float = None,
-    energy_t_1: float = None,
-) -> float:
+    energy_s_1: float | None = None,
+    energy_t_1: float | None = None,
+) -> tuple[float, dict[tuple[int, int], dict[str, float]]]:
     """Calculate dynamic spin polarization difference with perturbation theory.
 
     Spin polarization difference between singlet and triplet HOMO->LUMO excited
@@ -1249,8 +1249,10 @@ def calculate_dsp(
     # Do perturbation
     excitations = {}
     for i, j in single_excitations:
-        k_x = ppp.mo_integrals[i, homo_idx, homo_idx, j]
-        k_y = ppp.mo_integrals[i, lumo_idx, lumo_idx, j]
+        k_x: float = ppp.mo_integrals[i, homo_idx, homo_idx, j]
+        k_y: float = ppp.mo_integrals[i, lumo_idx, lumo_idx, j]
+        gap_s: float
+        gap_t: float
         if ci is True:
             gap_s = (
                 ppp.fock_matrix_mo[j, j]
@@ -1278,6 +1280,6 @@ def calculate_dsp(
             "dsp": -s_1 + t_1 + t_2,
         }
 
-    dsp = sum(excitation["dsp"] for excitation in excitations.values())
+    dsp: float = sum(excitation["dsp"] for excitation in excitations.values())
 
     return dsp, excitations
