@@ -1,6 +1,5 @@
 dependencies:
   - python>=3.8
-  - nox
   - black
   - flake8
   - flake8-black
@@ -15,3 +14,4 @@ dependencies:
   - pip
   - pip:
       - flake8-annotations
+      - nox

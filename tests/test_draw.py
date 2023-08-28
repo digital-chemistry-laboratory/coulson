@@ -26,7 +26,7 @@ def test_draw_orbital_energies(huckel_input):
     huckel_matrix, n_electrons = huckel_input
     hc = HuckelCalculator(huckel_matrix, n_electrons)
 
-    fig, ax = draw_orbital_energies(hc.energies)
+    fig, ax = draw_orbital_energies(hc.energies, draw_occupation_labels=False)
 
     assert True
 

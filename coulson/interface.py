@@ -473,7 +473,9 @@ def gen_coords_for_mol(
     """
     n_conformers = mol.GetNumConformers()
     if n_conformers > 0:
-        warnings.warn(f"Mol already has coordinates: {n_conformers} conformers")
+        warnings.warn(
+            f"Mol already has coordinates: {n_conformers} conformers", stacklevel=2
+        )
     if coordgen is True:
         ps = rdCoordGen.CoordGenParams()
         ps.minimizerPrecision = ps.sketcherBestPrecision

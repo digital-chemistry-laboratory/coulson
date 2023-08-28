@@ -1,5 +1,10 @@
 """Test utility functions and classes."""
+
+from __future__ import annotations
+
+import itertools
 import sys
+from typing import TypeVar
 
 import numpy as np
 import pytest
@@ -7,6 +12,28 @@ import pytest
 from coulson.graph_utils import get_simple_cycles
 from coulson.typing import Array2DInt
 from coulson.utils import Import, requires_dependency
+
+# TypeVar to parameterize for specific types
+A = TypeVar("A", list, tuple)
+
+
+def is_cyclic_permutation(a: A, b: A) -> bool:
+    """Test if two cycles are permutations of each other.
+
+    Taken from https://github.com/networkx/networkx/blob/main/networkx/algorithms/tests/test_cycles.py # noqa: B950
+
+    Args:
+        a: First cycle
+        b: Second cycle
+
+    Returns:
+        True if cycles are permutations of each other
+    """
+    n = len(a)
+    if len(b) != n:
+        return False
+    l = a + a
+    return any(l[i : i + n] == b for i in range(n))
 
 
 def test_requires_depedency_module():
@@ -89,4 +116,7 @@ def test_get_simple_cycles():
     ref_rings = [(0, 9, 4, 3, 2, 1), (4, 9, 8, 7, 6, 5), (0, 9, 8, 7, 6, 5, 4, 3, 2, 1)]
     rings = get_simple_cycles(connectivity_matrix)
 
-    assert ref_rings == rings
+    checks = []
+    for rings_permuted in itertools.permutations(rings):
+        checks.append(map(is_cyclic_permutation, ref_rings, rings_permuted))
+    assert any(checks)

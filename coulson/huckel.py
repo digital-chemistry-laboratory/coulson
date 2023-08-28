@@ -156,7 +156,7 @@ class HuckelCalculator:
         i_rings: list[float] = []
         for indices in i_ring_indices:
             i_ring = 1
-            for (i, j) in zip(indices, indices[1:] + indices[:1]):
+            for i, j in zip(indices, indices[1:] + indices[:1]):
                 i_ring *= self.bo_matrix[i, j]
             i_rings.append(i_ring)
         index = sum(i_rings)

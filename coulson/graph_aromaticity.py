@@ -150,7 +150,7 @@ def matching_polynomial(G: nx.Graph) -> np.polynomial.Polynomial:
     graphs = [(G, 1)]
 
     # Cut graph into linear pieces and evaluate their matching polynomials
-    mp = np.polynomial.Polynomial(0)  # type: ignore
+    mp = np.polynomial.Polynomial(0)
     while graphs:
         # Create a working graph
         w_g, factor = graphs.pop()
@@ -201,7 +201,7 @@ def matching_polynomial(G: nx.Graph) -> np.polynomial.Polynomial:
             graphs.append((n_g_2, -1 * factor * e_weight**2))
         else:
             # Create matching polynomial directly from array for acyclic structure
-            poly = np.polynomial.Polynomial(np.poly(nx.to_numpy_array(w_g))[::-1])  # type: ignore
+            poly = np.polynomial.Polynomial(np.poly(nx.to_numpy_array(w_g))[::-1])
             mp += factor * poly
 
     return mp
@@ -332,7 +332,7 @@ def calculate_circuits(
         mask[list(indices)] = False
         submatrix = huckel_matrix[mask, :][:, mask]
         if len(submatrix) == 0:
-            rp = np.polynomial.Polynomial(1.0)  # type: ignore
+            rp = np.polynomial.Polynomial(1.0)
             roots_rp = rp.roots()  # type: ignore
         else:
             roots_rp = np.linalg.eigvalsh(submatrix)
